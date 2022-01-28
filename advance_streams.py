@@ -50,15 +50,37 @@ print("Advancing streams to broadcasts whose sessions start in the interval [{},
 end_sessions = []
 start_sessions = []
 for k, v in day.get_sessions(False).items():
+    if not v.is_livestreamed():
+        print(f"Skipping non-livestreamed session {v.event_session_title()}")
+        continue
+
     time = v.session_time()
     if time[1] >= time_end and time[1] <= time_start:
         end_sessions.append(v)
     elif time[0] >= time_end and time[0] <= time_start:
         start_sessions.append(v)
 
+print("=" * 10 + "\nPreview:")
+print("Will end:")
+for s in end_sessions:
+    print(s.event_session_title())
+    print("-----")
+
+print("Will start:")
+for s in start_sessions:
+    print(s.event_session_title())
+    print("-----")
+
+print("=" * 10)
+
+ok = input("Proceed? (y/n): ")
+if ok == "n":
+    print("Cancelling")
+    sys.exit(0)
+
 print("=" * 10 + "\nEnding sessions:")
 for s in end_sessions:
-    print(s)
+    print(s.event_session_title())
     s.stop_streaming()
     non_consent_text = "Does not consent to video recording, Will edit out in post"
     if non_consent_text in s.special_notes():
@@ -68,7 +90,7 @@ for s in end_sessions:
 
 print("=" * 10 + "\nStarting sessions:")
 for s in start_sessions:
-    print(s)
+    print(s.event_session_title())
     s.start_streaming()
     print("-----")
 
@@ -77,8 +99,7 @@ client = discord.Client()
 @client.event
 async def on_ready():
     embed = schedule.base_discord_embed()
-    embed["title"] = "The Session has Ended"
-    embed["description"] = "Feel free to continue discussing in this channel."
+    embed["title"] = "The session has ended"
 
     for s in end_sessions:
         if not s.has_discord_channel():
@@ -87,9 +108,10 @@ async def on_ready():
         guild = [g for g in client.guilds if str(g.id) == guild_id][0]
         channel = [c for c in guild.text_channels if str(c.id) == channel_id]
         if len(channel) > 0:
-            session_info = await channel[0].send(embed=discord.Embed.from_dict(embed))
+            embed["description"] = f"Thanks for attending {s.event_session_title()}!"
+            await channel[0].send(embed=discord.Embed.from_dict(embed))
 
-    embed["title"] = "The Session is Starting"
+    embed["title"] = "The next session will begin soon"
     embed["description"] = ""
     for s in start_sessions:
         if not s.has_discord_channel():
@@ -98,7 +120,9 @@ async def on_ready():
         guild = [g for g in client.guilds if str(g.id) == guild_id][0]
         channel = [c for c in guild.text_channels if str(c.id) == channel_id]
         if len(channel) > 0:
-            session_info = await channel[0].send(embed=discord.Embed.from_dict(embed))
+            await channel[0].send(embed=discord.Embed.from_dict(embed))
+            session_start_info = await channel[0].send(embed=discord.Embed.from_dict(s.discord_embed_dict()))
+            await session_start_info.pin()
 
     print("Start/End messages sent, hit Ctrl-C to kill the bot")
 

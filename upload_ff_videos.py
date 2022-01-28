@@ -20,17 +20,17 @@ Usage:
 
 arguments = docopt(USAGE)
 
-sheet_name = "friday"
-title_field = "Time Slot Title"
+sheet_name = "VIS 2021"
+title_field = "Title"
 authors_field = "Authors"
-description_field = "Abstract"
+description_field = "Abstract/Description"
 video_file_field = "Video File"
 subtitles_file_field = "Subtitles File"
-playlist_prefix_field = "Event"
-playlist_field = "Session"
+playlist_prefix_field = "All Playlist Prefix"
+playlist_field = "All Playlist Title"
 
-out_youtube_video_field = "Youtube Video"
-out_youtube_playlist_field = "Youtube Playlist"
+out_youtube_video_field = "Video URL"
+out_youtube_playlist_field = "Playlist URL"
 
 infile = arguments["<video_list.xlsx>"]
 outfile = os.path.splitext(infile)[0] + "_uploaded.xlsx"
@@ -165,6 +165,8 @@ for r in range(2, video_table.table.max_row + 1):
     # exists because we don't need it
     if not video_info[video_file_field].value or video_info[out_youtube_video_field].value:
         continue
+    if video_info[video_file_field].value == "NA":
+        continue
     video = os.path.join(video_root_path, video_info[video_file_field].value)
     if not os.path.isfile(video):
         all_files_found = False
@@ -211,8 +213,8 @@ for r in range(2, video_table.table.max_row + 1):
     if not video_info[video_file_field].value:
         continue
 
-    if videos_uploaded >= 85:
-        print("Stopping after uploading 85 videos, approaching upload limit")
+    if videos_uploaded >= 95:
+        print("Stopping after uploading 95 videos, approaching upload limit")
         break
 
     print(f"{video_info[video_file_field].value}")

@@ -2,7 +2,10 @@
 *.pickle
 auth.json
 *.xlsx
-
+new_imports_*.json
+set_env.sh
+registered.json
+registration_stats.json
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -132,3 +135,10 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+.DS_Store
+paper_list.json
+session_list.json
+firebase_data*.json
+poster_list.json
+firebase_sessions/
+timestamps/

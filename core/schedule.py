@@ -1,6 +1,8 @@
 import re
+import io
 import os
 import sys
+import time
 import pprint
 import json
 import requests
@@ -17,23 +19,26 @@ from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from datetime import timezone, datetime, timedelta
 from googleapiclient.http import MediaIoBaseUpload
+from PIL import Image
 
 import core.excel_db as excel_db
 import core.auth as conf_auth
 import core.thumbnail as thumbnail
 
 # Your conference time zone
-conf_tz = timezone(-timedelta(hours=6))
+# VIS2021 is in Lousiana end of Oct: Central Daylight Time
+# UTC-5
+conf_tz = timezone(-timedelta(hours=5))
 
 # Your conference name
-CONFERENCE_NAME = "Conference 2020"
+CONFERENCE_NAME = "VIS 2021"
 # NOTE: This should be a URL to a wide aspect ratio conference logo image
 # See the image at the URL for an example
-CONFERENCE_LOGO_URL = "https://i.imgur.com/amRNJoR.png"
+CONFERENCE_LOGO_URL = "https://i.imgur.com/jxtqPae.png"
 # NOTE: This should be a URL to your a square conference icon image
 # See the image at the URL for an example
-CONFERENCE_ICON_URL = "https://i.imgur.com/amRNJoR.png"
-CONFERENCE_YEAR = 2020
+CONFERENCE_ICON_URL = "https://i.imgur.com/jxtqPae.png"
+CONFERENCE_YEAR = 2021
 
 match_timeslot = re.compile("(\d\d)(\d\d)-(\d\d)(\d\d)")
 
@@ -85,6 +90,23 @@ def match_discord_channel_id(url):
 
 def match_discord_guild_id(url):
     return match_discord_url(url)[0]
+
+def make_discord_category_name(name):
+    name = re.sub("\\-+", "-", re.sub("[^0-9A-Za-z\\- ]+", "", name.lower()))
+    # Max length is 100
+    if len(name) > 100:
+        return name[0:99].strip()
+    return name
+
+# Channel names have to be lower case without spaces and certain characters (&) so take
+# these out. They also can't have two -- in a sequence so also replace those
+def make_disord_channel_name(name):
+    name = re.sub("\\-+", "-", re.sub("[^0-9A-Za-z\\-]+", "", name.lower().replace(" ", "-")))
+    # Max length is 100
+    if len(name) > 100:
+        return name[0:99]
+    return name
+
 
 def base_discord_embed():
     return {
@@ -144,10 +166,56 @@ def send_html_email(subject, body, recipients, email, cc_recipients=None, attach
         })
     print(response)
 
+def schedule_zoom_meeting(auth, title, password, start, end, agenda, host, alternative_hosts=[]):
+    # Max Zoom meeting topic length is 200 characters
+    if len(title) > 200:
+        title = title[0:199]
+    # Max agenda length is 2000 characters
+    if len(agenda) > 2000:
+        agenda = agenda[0:1999]
+
+    meeting_info = {
+        "topic": title,
+        "type": 2,
+        "start_time": start.astimezone(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "timezone": "UTC",
+        "duration": int((end - start).total_seconds() / 60.0),
+        "password": password,
+        "agenda": agenda,
+        "settings": {
+            "host_video": False,
+            "participant_video": False,
+            "join_before_host": True,
+            "mute_upon_entry": True,
+            "waiting_room": False,
+            "audio": "both",
+            "alternative_hosts": ",".join(alternative_hosts),
+            "global_dial_in_countries": [
+                # NOTE: Fill in dial in countries as appropriate for your conference
+                "DE",
+                "SE",
+                "JP",
+                "KR",
+                "GB",
+                "US",
+                "CA"
+            ]
+        }
+    }
+
+    zoom_info = requests.post("https://api.zoom.us/v2/users/{}/meetings".format(host),
+            json=meeting_info, headers=auth.zoom).json()
+    return zoom_info
+
+def get_zoom_meeting_start_url(auth, meeting_id):
+    zoom_info = requests.get("https://api.zoom.us/v2/meetings/{}".format(meeting_id),
+            headers=auth.zoom).json()
+    return zoom_info["start_url"]
+
 class Database:
-    def __init__(self, workbook_name, youtube=False, email=False, use_pickled_credentials=False):
+    def __init__(self, workbook_name, youtube=False, email=False, discord=False, eventbrite=False, zoom=False, use_pickled_credentials=False):
         self.workbook = excel_db.open(workbook_name)
-        if youtube or email:
+        if youtube or email or discord or eventbrite or zoom:
             self.auth = conf_auth.Authentication(youtube=youtube, email=email, use_pickled_credentials=use_pickled_credentials)
         else:
             self.auth = None
@@ -155,7 +223,7 @@ class Database:
         self.computers = self.workbook.get_table("computers")
 
     def get_day(self, day):
-        return Day(self, self.workbook.get_table(day))
+        return Day(self, self.workbook.get_table(day), day)
 
     def save(self, output):
         self.workbook.save(output)
@@ -174,13 +242,32 @@ class Database:
                 if c["Youtube Stream Key"].value == s["cdn"]["ingestionInfo"]["streamName"]:
                     c["Youtube Stream Key ID"].value = s["id"]
 
+    def populate_zoom_host_ids(self):
+        r = requests.get("https://api.zoom.us/v2/users?status=active&page_size=30&page_number=1",
+                headers=self.auth.zoom).json()
+        # Find the host for each computer/track
+        for user in r["users"]:
+            # Maria has an account on the IEEE VIS Zoom to manage billing
+            if not user["last_name"].isnumeric():
+                continue
+            c = self.get_computer(int(user["last_name"]))
+            if c:
+                c["Zoom Host ID"].value = str(user["id"])
+            else:
+                print(f"No computer or multiple found for Zoom host {user['first_name']}, {user['last_name']}")
+            
+
     def get_computer(self, computer_id):
-        return [c for c in self.computers.items() if c["ID"].value == computer_id][0]
+        found = [c for c in self.computers.items() if c["ID"].value == computer_id]
+        if len(found) == 1:
+            return found[0]
+        return None
 
 class Day:
-    def __init__(self, database, sheet):
+    def __init__(self, database, sheet, sheet_name):
         self.database = database
         self.sheet = sheet
+        self.sheet_name = sheet_name
 
         # Get the month and day from the sheet
         match_day = re.compile("\w+ (\d+)/(\d+)")
@@ -225,6 +312,9 @@ class Session:
     def timeslot_time(self, t):
         return parse_time_slot(self.timeslot_entry(t, "Time Slot").value, self.day.month, self.day.day)
 
+    def get_track(self):
+        return self.timeslot_entry(0, "Computer").value
+
     # Get the (start, end) time of the entire session
     # The start time is the start of the first time slot in the session,
     # the end time is the end time of the last time slot
@@ -253,9 +343,15 @@ class Session:
         return match_discord_url(self.timeslot_entry(0, "Discord Link").value)
 
     def setup_time(self):
-        if self.timeslot_entry(0, "Time Slot Type").value != "Zoom Only":
+        timeslot_type = self.timeslot_entry(0, "Time Slot Type").value 
+        if timeslot_type != "Zoom Only" and timeslot_type != "Gathertown Only":
             return timedelta(minutes=15)
         return timedelta(minutes=0)
+
+    def is_livestreamed(self):
+        timeslot_type = self.timeslot_entry(0, "Time Slot Type").value
+        return timeslot_type != "Zoom Only" and timeslot_type != "Discord Only" \
+            and timeslot_type != "Gathertown Only"
 
     def special_notes(self):
         notes = set()
@@ -269,11 +365,15 @@ class Session:
                 notes.add("Uses custom title image")
         return notes
 
+    def get_stream_key(self):
+        computer = self.timeslot_entry(0, "Computer").value
+        return self.day.database.get_computer(computer)["Youtube Stream Key"].value
+
     def get_stream_status(self):
         computer = self.timeslot_entry(0, "Computer").value
-        stream_key = self.day.database.get_computer(computer)["Youtube Stream Key ID"].value
+        stream_key_id = self.day.database.get_computer(computer)["Youtube Stream Key ID"].value
         response = self.auth.youtube.liveStreams().list(
-            id=stream_key,
+            id=stream_key_id,
             part="status"
         ).execute()
         return response["items"][0]["status"]["streamStatus"], response["items"][0]["status"]["healthStatus"]["status"]
@@ -292,11 +392,28 @@ class Session:
         ).execute()
         return response["items"][0]["liveStreamingDetails"]
 
+    # Record one or more stream update time stamps to the file
+    def record_stream_update_timestamp(self, timestamps):
+        if not os.path.isdir("./timestamps"):
+            os.makedirs("./timestamps", exist_ok=True)
+        timestamp_file = "./timestamps/" + self.timeslot_entry(0, "Session ID").value + ".json"
+        timestamp_log = []
+        if os.path.isfile(timestamp_file):
+            with open(timestamp_file, "r") as f:
+                timestamp_log = json.load(f)
+
+        timestamp_log.append({
+            "update": format_time(datetime.now().astimezone()),
+            "timestamps": timestamps
+        })
+        with open(timestamp_file, "w") as f:
+            json.dump(timestamp_log, f, indent=4)
+
     def start_streaming(self):
-        timeslot_type = self.timeslot_entry(0, "Time Slot Type").value
-        if timeslot_type == "Zoom Only" or timeslot_type == "Discord Only":
+        if not self.is_livestreamed():
             print("Not streaming Zoom/Discord only event")
             return
+
         computer = self.timeslot_entry(0, "Computer").value
         if "Manual Stream" in self.special_notes():
             print("Stream for {} must be assigned to computer {} and advanced manually".format(
@@ -307,41 +424,88 @@ class Session:
         stream_key = computer_info["Youtube Stream Key"].value
         stream_key_id = computer_info["Youtube Stream Key ID"].value
 
-        stream_status, stream_health = self.get_stream_status()
-        broadcast_status = self.get_broadcast_status()
-        # Broadcast could be in the ready state (configured and a stream key was bound),
-        # or in the created state (configured but no stream key attached yet).
-        if broadcast_status != "ready" and broadcast_status != "created":
-            print("Broadcast {} is in state {}, and cannot be (re-)made live".format(self.youtube_broadcast_id(), broadcast_status))
-            return
-
-        if stream_status != "active":
-            print("Stream on computer {} (key {}) for broadcast {} is not active (currently {}), broadcast cannot be made live".format(
-                computer, stream_key, self.youtube_broadcast_id(), stream_status))
-            return
-
-        if stream_health != "good":
-            print("WARNING: Stream on computer {} (key {}) is active, but not healthy. Health status is {}".format(
-                computer, stream_key, stream_health))
+        # We always re-run the YT stream key attachment and Zoom side setup, as we could be
+        # trying to recover from a zoom meeting that was ended accidentally and crashed the stream.
+        # In this case, we need to resetup the Zoom connection to the live stream
+        # and will simply exit when we check the live stream status and see that it's already live.
 
         # Attach the stream to the broadcast
-        print("Attaching stream '{}' to '{}'".format(stream_key, self.youtube_broadcast_id()))
+        print(f"Attaching stream '{stream_key}' to Youtube broadcast '{self.youtube_broadcast_id()}'")
         self.auth.youtube.liveBroadcasts().bind(
             id=self.youtube_broadcast_id(),
             part="status",
             streamId=stream_key_id,
         ).execute()
 
-        # Make the broadcast live
+        # Attach YT broadcast to the Zoom meeting
+        livestream_info = {
+            "stream_url": "rtmp://a.rtmp.youtube.com/live2",
+            "stream_key": stream_key,
+            "page_url": self.timeslot_entry(0, "Youtube Broadcast").value
+        }
+        print(f"Attaching stream '{stream_key}' to Zoom meeting '{self.get_zoom_meeting_id()}'")
+        add_livestream = requests.patch("https://api.zoom.us/v2/meetings/{}/livestream".format(
+            self.get_zoom_meeting_id()), json=livestream_info, headers=self.auth.zoom)
+        print(add_livestream)
+        if add_livestream.status_code != 204:
+            print(f"ERROR: Failed to set live stream for Zoom meeting {self.event_session_title()}")
+            sys.exit(1)
+
+        # Start the Zoom meeting livestream
+        zoom_params = {
+            "action": "start"
+        }
+        print(f"Starting zoom stream for {self.get_zoom_meeting_id()}")
+        start_zoom_stream = requests.patch("https://api.zoom.us/v2/meetings/{}/livestream/status".format(
+            self.get_zoom_meeting_id()),
+            json=zoom_params, headers=self.auth.zoom)
+        print(start_zoom_stream)
+        if start_zoom_stream.status_code != 204:
+            print("Failed to start live stream") 
+            print(start_zoom_stream.text)
+            sys.exit(1)
+
+        # Wait about 9s for the Zoom stream to connect, though it seems to be instant
+        print("Sleeping 8s for Zoom live stream to begin")
+        time.sleep(8)
+
+        broadcast_status = self.get_broadcast_status()
+        # Broadcast could be in the ready state (configured and a stream key was bound),
+        # or in the created state (configured but no stream key attached yet).
+        if broadcast_status != "ready" and broadcast_status != "created":
+            print("Broadcast {} is in state {}, and cannot be (re-)made live".format(self.youtube_broadcast_id(),
+                broadcast_status))
+            return
+
+        # Check the status of the live stream to make sure it's running before we make it live
+        retries = 0
+        stream_status, stream_health = self.get_stream_status()
+        if stream_status != "active":
+            print(f"Stream on computer {computer} (key {stream_key}) for" +
+                f"broadcast {self.youtube_broadcast_id()} is not active (currently {stream_status})." +
+                "will wait 5s longer for Zoom and retry")
+            time.sleep(5)
+            retries = retries + 1
+            if retries >= 2:
+                print(f"Retried {retries} times and zoom stream is still not live!?")
+
+        if stream_health != "good":
+            print("WARNING: Stream on computer {} (key {}) is active, but not healthy. Health status is {}".format(
+                computer, stream_key, stream_health))
+
+        # Make the broadcast live. Record the start/end times of this call in case
+        # We need to resync the stream
+        start_transition_call = int(time.time())
         self.auth.youtube.liveBroadcasts().transition(
             broadcastStatus="live",
             id=self.youtube_broadcast_id(),
             part="status"
         ).execute()
+        end_transition_call = int(time.time())
+        self.record_stream_update_timestamp([start_transition_call, end_transition_call])
 
     def stop_streaming(self):
-        timeslot_type = self.timeslot_entry(0, "Time Slot Type").value
-        if timeslot_type == "Zoom Only" or timeslot_type == "Discord Only":
+        if not self.is_livestreamed():
             print("No stream to stop for Zoom/Discord only event")
             return
 
@@ -373,8 +537,7 @@ class Session:
             part="status"
         ).execute()
 
-        # Enable embedding the archived livestream, since with a new account
-        # we can't embed the live stream itself
+        # Make sure the video archive is also embeddable
         self.auth.youtube.videos().update(
             part="id,contentDetails,status",
             body={
@@ -385,87 +548,66 @@ class Session:
             }
         ).execute()
 
-    # Create the virtual aspects of the session to be streamed by the specified computer
-    def create_virtual_session(self, computer, thumbnail_params):
-        for t in range(0, len(self.timeslots)):
-            self.timeslot_entry(t, "Computer").value = computer
-        if self.timeslot_entry(0, "Time Slot Type").value != "Zoom Only":
-            self.schedule_youtube_broadcast(thumbnail_params)
-        self.schedule_zoom()
-
-    # Schedule the Zoom meeting for the session and populate the sheet
-    def schedule_zoom(self):
-        computer = self.timeslot_entry(0, "Computer").value
-
-        # First get our user info (we'll just have 1 per-account I guess?)
-        headers = self.auth.zoom
-        r = requests.get("https://api.zoom.us/v2/users?status=active&page_size=30&page_number=1", headers=headers).json()
-        # Find the computer assigned to host the meeting and make them the main host, all
-        # others are alternative hosts. NOTE: Each computer's Zoom account is identified by
-        # having its last name be its computer ID letter
-        host = None
-        alternative_hosts = []
-        for user in r["users"]:
-            if user["last_name"] == computer:
-                host = user["id"]
-            else:
-                alternative_hosts.append(user["id"])
-
-        session_time = self.session_time()
-        # Zoom meetings start 15min ahead of time to set up, and can run 10min over
-        zoom_start = session_time[0] - self.setup_time()
-        zoom_end = session_time[1] + timedelta(minutes=10)
-        meeting_topic = CONFERENCE_NAME + ": " + self.event_session_title()
-        # Max Zoom meeting topic length is 200 characters
-        if len(meeting_topic) > 200:
-            meeting_topic = meeting_topic[0:199]
-        # Max agenda length is 2000 characters
-        meeting_agenda = str(self)
-        if len(meeting_agenda) > 2000:
-            meeting_agenda = meeting_agenda[0:1999]
-
-        meeting_info = {
-            "topic": meeting_topic,
-            "type": 2,
-            "start_time": zoom_start.astimezone(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "timezone": "UTC",
-            "duration": int((zoom_end - zoom_start).total_seconds() / 60.0),
-            "password": generate_password(),
-            "agenda": meeting_agenda,
-            "settings": {
-                "host_video": False,
-                "participant_video": False,
-                "join_before_host": False,
-                "mute_upon_entry": True,
-                "waiting_room": True,
-                "audio": "both",
-                "alternative_hosts": ",".join(alternative_hosts),
-                "global_dial_in_countries": [
-                    # NOTE: Fill in dial in countries as appropriate for your conference
-                    "DE",
-                    "SE",
-                    "JP",
-                    "KR",
-                    "GB",
-                    "US",
-                    "CA"
-                ]
-            }
+        # Stop the Zoom meeting livestream
+        zoom_params = {
+            "action": "stop"
         }
+        requests.patch("https://api.zoom.us/v2/meetings/{}/livestream/status".format(self.get_zoom_meeting_id()),
+            json=zoom_params, headers=self.auth.zoom)
 
-        zoom_info = requests.post("https://api.zoom.us/v2/users/{}/meetings".format(host), json=meeting_info, headers=headers).json()
+    # Create the virtual aspects of the session to be streamed by the computer in the sheet
+    # The tracks are now preassigned this year to match up with the conference tracks better
+    def create_virtual_session(self, thumbnail_params):
+        timeslot_type = self.timeslot_entry(0, "Time Slot Type").value
+        if timeslot_type != "Zoom Only" and timeslot_type != "Gathertown Only" and timeslot_type != "No YT No Zoom":
+            self.schedule_youtube_broadcast(thumbnail_params)
+        self.populate_zoom_info()
+
+    # Each track has a single day-long Zoom meeting that is shared by all sessions
+    # So here we just populate the session's time slots with the Computer's zoom info
+    def populate_zoom_info(self):
+        track = self.timeslot_entry(0, "Computer").value
+
+        day_name = self.day.sheet_name
+        computer = self.day.database.get_computer(track)
+        zoom_url = computer[f"Zoom URL {day_name}"].value
+        zoom_meeting_id = computer[f"Zoom Meeting ID {day_name}"].value
+        zoom_password = computer[f"Zoom Password {day_name}"].value
 
         # Fill in the Zoom info in the sheet
         for t in range(0, len(self.timeslots)):
-            self.timeslot_entry(t, "Zoom URL").value = zoom_info["join_url"]
-            self.timeslot_entry(t, "Zoom Meeting ID").value = str(zoom_info["id"])
-            self.timeslot_entry(t, "Zoom Password").value = meeting_info["password"]
+            self.timeslot_entry(t, "Zoom URL").value = zoom_url
+            self.timeslot_entry(t, "Zoom Meeting ID").value = zoom_meeting_id
+            self.timeslot_entry(t, "Zoom Password").value = zoom_password
+
+    # Each track has a single discord channel shared by all sessions,
+    # so here we just populate the session's time slots with the Computer's info
+    def populate_discord_info(self):
+        track = self.timeslot_entry(0, "Computer").value
+
+        computer = self.day.database.get_computer(track)
+        discord_link = computer[f"Discord Link"].value
+        discord_channel_id = computer[f"Discord Channel ID"].value
+        discord_invite_link = computer[f"Discord Invite Link"].value
+
+        # Fill in the Zoom info in the sheet
+        for t in range(0, len(self.timeslots)):
+            self.timeslot_entry(t, "Discord Link").value = discord_link
+            self.timeslot_entry(t, "Discord Channel").value = discord_channel_id
+            self.timeslot_entry(t, "Discord Invite Link").value = discord_invite_link
+
+    def get_zoom_meeting_id(self):
+        return self.timeslot_entry(0, "Zoom Meeting ID").value
 
     def get_zoom_meeting_info(self):
         # We don't keep this huge list of numbers in the spreadsheet, so we need to fetch it when needed
         headers = self.auth.zoom
-        meeting_id = self.timeslot_entry(0, "Zoom Meeting ID").value
+        meeting_id = self.get_zoom_meeting_id()
         meeting_info = requests.get("https://api.zoom.us/v2/meetings/{}".format(meeting_id), headers=headers).json()
+        if "code" in meeting_info:
+            print("Failed to get meeting info")
+            print(meeting_info)
+            return None
         return meeting_info
 
     def make_youtube_title(self):
@@ -476,12 +618,19 @@ class Session:
         # Similar rules for the description as the title, but max length of 5000 characters
         return make_youtube_description(str(self))
 
+    def get_slido_url(self):
+        track = self.get_track()
+        computer = self.day.database.get_computer(track)
+        slido_event = computer["Slido Event"].value
+        slido_room = computer["Slido Room"].value
+        return f"https://app.sli.do/event/{slido_event}?section={slido_room}"
+
     # Schedule the Youtube broadcast for the sessions and populate the sheet
     def schedule_youtube_broadcast(self, thumbnail_params):
         title = self.make_youtube_title()
         description = self.make_youtube_description()
         session_time = self.session_time()
-        enable_captions = "Live Captions" in self.special_notes()
+        enable_captions = "YTCaptions" in self.special_notes()
         broadcast_info = self.auth.youtube.liveBroadcasts().insert(
             part="id,snippet,contentDetails,status",
             body={
@@ -492,7 +641,7 @@ class Session:
                     # Note: YouTube requires you to have 1k subscribers and 4k public watch hours
                     # to enable embedding live streams. You can set this to true if your account
                     # meets this requirement and you've enabled embedding live streams
-                    "enableEmbed": False,
+                    "enableEmbed": True,
                     "enableAutoStart": False,
                     "enableAutoEnd": False,
                     "recordFromStart": True,
@@ -510,35 +659,32 @@ class Session:
                     "description": description,
                 },
                 "status": {
-                    "privacyStatus": "public"
+                    "privacyStatus": "unlisted"
                 }
             }
         ).execute()
 
         # Due to a bug in the Youtube Broadcast API we have to set the made for
-        # kids flag through the videos API separately
+        # kids and embeddable flags through the videos API separately
         update_resp = self.auth.youtube.videos().update(
             part="id,contentDetails,status",
             body={
                 "id": broadcast_info["id"],
                 "status": {
                     "selfDeclaredMadeForKids": False,
+                    "embeddable": True
                 }
             }
         ).execute()
 
         # Render the thumbnail for the session and upload it
-        thumbnail_img = thumbnail.render_thumbnail(thumbnail_params["background"],
-                thumbnail_params["bold_font"],
-                thumbnail_params["regular_font"],
-                self.title_card_title(),
-                self.title_card_chair(),
-                self.title_card_schedule())
+        if thumbnail_params:
+            thumbnail_img = self.render_thumbnail(thumbnail_params)
 
-        self.auth.youtube.thumbnails().set(
-            videoId=broadcast_info["id"],
-            media_body=MediaIoBaseUpload(thumbnail_img, mimetype="image/png")
-        ).execute()
+            self.auth.youtube.thumbnails().set(
+                videoId=broadcast_info["id"],
+                media_body=MediaIoBaseUpload(thumbnail_img, mimetype="image/png")
+            ).execute()
 
         for t in range(0, len(self.timeslots)):
             self.timeslot_entry(t, "Youtube Control Room").value = \
@@ -563,12 +709,31 @@ class Session:
             }
         ).execute()
 
+    def render_thumbnail(self, thumbnail_params):
+        # Some sessions give us a custom image they want to use
+        if self.timeslot_entry(0, "Custom Title Image").value:
+            custom_img_path = os.path.join(thumbnail_params["asset_root_dir"], self.timeslot_entry(0, "Custom Title Image").value)
+            custom_img = Image.open(custom_img_path)
+            img_bytes = io.BytesIO()
+            custom_img.save(img_bytes, format="png")
+            return img_bytes
+        else:
+            track = self.timeslot_entry(0, "Computer").value
+            computer = self.day.database.get_computer(track)
+            slido_event = computer["Slido Event"].value
+            slido_room = computer["Slido Room"].value
+            slido_url = None
+            if slido_event and slido_room:
+                slido_url = f"https://app.sli.do/event/{slido_event}?section={slido_room}"
+            return thumbnail.render_thumbnail(thumbnail_params["background"],
+                    thumbnail_params["fonts"],
+                    self.title_card_title(),
+                    self.title_card_chair(),
+                    self.title_card_schedule(),
+                    qr_string=slido_url)
+
     def chat_category_name(self):
-        name = re.sub("\-+", "-", re.sub("[^0-9A-Za-z\- ]+", "", self.event.lower()))
-        # Max length is 100
-        if len(name) > 100:
-            return name[0:99].strip()
-        return name
+        return make_discord_category_name(self.event)
 
     # Channel names have to be lower case without spaces and certain characters (&) so take
     # these out. They also can't have two -- in a sequence so also replace those
@@ -579,11 +744,7 @@ class Session:
         if self.timeslot_entry(0, "Event Type").value == "Tutorial" \
             or self.timeslot_entry(0, "Event").value == self.timeslot_entry(0, "Session").value:
                 return "general"
-        name = re.sub("\-+", "-", re.sub("[^0-9A-Za-z\-]+", "", self.name.lower().replace(" ", "-")))
-        # Max length is 100
-        if len(name) > 100:
-            return name[0:99]
-        return name
+        return make_disord_channel_name(self.name)
 
     def contributor_info_html(self, zoom_meeting_info):
         session_time = self.session_time()
@@ -602,18 +763,27 @@ class Session:
         # List two numbers for each country, and the one click phone number.
         # Zoom already sends the numbers sorted by country, so no need to re-group them here
         zoom_call_info = ""
-        listed_countries = {number["country"]: 0 for number in zoom_meeting_info["settings"]["global_dial_in_numbers"]}
-        for number in zoom_meeting_info["settings"]["global_dial_in_numbers"]:
-            if listed_countries[number["country"]] == 1:
-                continue
-            listed_countries[number["country"]] += 1
+        zoom_password = ""
+        if zoom_meeting_info:
+            zoom_password = zoom_meeting_info["pstn_password"]
+            listed_countries = {number["country"]: 0 for number in zoom_meeting_info["settings"]["global_dial_in_numbers"]}
+            for number in zoom_meeting_info["settings"]["global_dial_in_numbers"]:
+                if listed_countries[number["country"]] == 1:
+                    continue
+                listed_countries[number["country"]] += 1
 
-            one_click_number = "{},,{}#,,{}#".format(number["number"],
-                    self.timeslot_entry(0, "Zoom Meeting ID").value,
-                    zoom_meeting_info["pstn_password"]).replace(" ", "")
+                one_click_number = "{},,{}#,,{}#".format(number["number"],
+                        self.timeslot_entry(0, "Zoom Meeting ID").value,
+                        zoom_meeting_info["pstn_password"]).replace(" ", "")
 
-            zoom_call_info += "<li><b>{}</b>: {} ({})</li><ul><li><b>One-click</b>: {}</li></ul>".format(
-                    number["country_name"], number["number"], number["type"], one_click_number)
+                zoom_call_info += "<li><b>{}</b>: {} ({})</li><ul><li><b>One-click</b>: {}</li></ul>".format(
+                        number["country_name"], number["number"], number["type"], one_click_number)
+
+
+        track = self.get_track()
+        computer = self.day.database.get_computer(track)
+        room_link = f"https://virtual.ieeevis.org/year/2021/room_room{computer['ID'].value}.html"
+        room_name = computer["Name"].value
 
         # NOTE: You'll want to replace this email content with your own, with links to the corresponding
         # conference webpages and your own schedule instructions.
@@ -621,20 +791,44 @@ class Session:
             <div style="margin-bottom:.5rem;margin-top:.5rem;">
             <h1>{session_title}</h1>
             <h2>Instructions</h2>
-                <p>Please see our guide on <a href="http://ieeevis.org/year/2020/info/presenter-information/presenting-virtually">
-                presenting at the virtual conference</a> and watch the relevant example session tutorial to see what to expect as
-                a presenter in the virtual conference.</p>
                 <p>
+                Please see <a href="http://ieeevis.org/year/2021/info/presenter-information/presenting-virtually">our guide on presenting virtually</a>.
                 <b>Joining the Zoom Meeting.</b> The Zoom meeting will begin 15 minutes before
                 the session starts to allow the contributors, chair, and technician to set up
                 and test everyone's audio and video set up. Make sure you are in a well-lit
                 and quiet room, and have your laptop plugged in.
-                <b>Please make sure your Zoom is updated to version 5.3 or later.</b>
+                <b>Please make sure your Zoom is updated to version 5.8 or later.</b>
                 Follow <a href="https://support.zoom.us/hc/en-us/articles/201362233-Upgrade-update-to-the-latest-version">
                 this guide</a> to update Zoom to the latest version.
                 The Zoom meeting information is included below in this email.
                 </p>
                 <p>
+                <b>During your Session.</b>
+                Do not watch yourself on the live viewer page during the session, as
+                this can cause audio feedback when you are live and be disorienting due to the
+                slight delay from the live stream. When the technican informs you that you are
+                live, <b>you are live!</b>
+                If your session contains recorded videos, the technician will alternate
+                between showing these videos in the player page and showing the Zoom live stream.
+                We recommend you turn your video off and mute yourself when the videos are being
+                played back.
+                </p>
+                <p>
+                <b>Live Q&A.</b>
+                After each talk there will be a live Q&A portion, depending on the session structure
+                (associated events and workshops may vary). The chair and presenter will both turn on
+                their video and unmute themselves for this portion before the stream is made live.
+                Questions will be asked on slido. The chair can select questions from slido and
+                read them aloud so that they are recorded on the live stream.
+                </p>
+                <p>
+                <b>As the Chair.</b>
+                The role of a chair in the virtual conference is similar to that in an in person
+                conference. You'll be responsible for introducing the talk and reading questions from
+                slido aloud on the stream to be answered by the speaker.
+                </p>
+                <p>
+                <b>At the end of your session.</b>
                 There is a <b>hard cut-off</b> 10 minutes after
                 the session is scheduled to end to allow time to set up the next session,
                 so please keep to the session schedule.
@@ -646,7 +840,8 @@ class Session:
                 <li>Session Start: {start}</li>
                 <li>Session End: {end}</li>
                 <li>Session Chair(s): {chairs}</li>
-                <li>Session Website: <a href="https://virtual.ieeevis.org/session_{session_id}.html">Virtual Conference Website</a></li>
+                <li>Session Website: <a href="https://virtual.ieeevis.org/year/2021/session_{session_id}.html">Virtual Conference Website</a></li>
+                <li>Session Room: <a href="{room_link}">{room_name}</a>.</li>
                 {schedule}
             </ul>
             <h2>Zoom Meeting Information (DO NOT DISTRIBUTE)</h2>
@@ -660,37 +855,38 @@ class Session:
                     {zoom_call_info}
                 </ul>
             </ul>
-            <h2>Youtube Information</h2>
-            <ul>
-                <li>Youtube URL: <a href="{youtube_url}">{youtube_url}</a></li>
-            </ul>
             <h2>Discord Chat Information</h2>
             You can download the Discord app <a href="https://discord.com/">here</a>, or use it in your browser.
             <ul>
                 <li>Discord Invitation: <a href="{discord_invite}">{discord_invite}</a></li>
                 <li>Discord Channel: <a href="{discord_url}">{discord_url}</a></li>
             </ul>
+            <h2>Slido Information</h2>
+            The slido for your session will be <a href="{slido_url}">here</a>. The slido page will also
+            be embedded on the room page and linked from the session page on the virtual site.
             </div>
             """.format(session_title=self.event_session_title(),
                     start=format_time(session_time[0]),
                     schedule=schedule_html,
-                    end=format_time(session_time[1]), chairs=" ".join(chairs),
+                    end=format_time(session_time[1]), chairs=", ".join(chairs),
                     session_id=self.timeslot_entry(0, "Session ID").value,
                     zoom_url=self.timeslot_entry(0, "Zoom URL").value,
                     zoom_id=self.timeslot_entry(0, "Zoom Meeting ID").value,
                     zoom_password=self.timeslot_entry(0, "Zoom Password").value,
-                    zoom_passcode=zoom_meeting_info["pstn_password"],
+                    zoom_passcode=zoom_password,
                     zoom_call_info=zoom_call_info,
-                    youtube_url=self.timeslot_entry(0, "Youtube Broadcast").value,
                     discord_invite=self.timeslot_entry(0, "Discord Invite Link").value,
-                    discord_url=self.timeslot_entry(0, "Discord Link").value)
+                    discord_url=self.timeslot_entry(0, "Discord Link").value,
+                    slido_url=self.get_slido_url(),
+                    room_link=room_link,
+                    room_name=room_name)
 
     # Email the contributor and chair who will be presenting in the session(s)
     # Multiple sessions can be taken for tutorials, where we only want to send one email
     # to the tutorial organizers with all the information
     # logo_image is the optional byte array of the image to attach and inline at
     # the bottom of the email
-    def email_contributors(self, logo_image=None):
+    def email_contributors(self, logo_image=None, cc_recipients=None):
         # Collect the list of emails for people in the session
         recipients = set()
         for t in range(self.num_timeslots()):
@@ -713,12 +909,26 @@ class Session:
         subject = CONFERENCE_NAME + ": {} Contributor and Chair Information".format(self.event_session_title())
 
         email_body = """<p>Dear Contributor, Chair, or Organizer,</p>
-                <p>This email contains information for a
-                conference session below in which you are a contributor, chair, or organizer.
-                You will receive one such email per-session and/or tutorial. Please contact the tech committee
-                with any questions.
-                <b>If you are the contact author, but not the presenter, please forward this immediately to the presenting author.</b>""" + \
-                self.contributor_info_html(zoom_meeting_info)
+            <p>This email contains information for a
+            conference session below in which you are a contributor, chair, or organizer.
+            You will receive one such email per-session and/or tutorial. Please contact the tech committee
+            with any questions.
+            </p>
+            <p>
+            <b>If you are the contact author, but not the presenter, please forward this
+            immediately to the presenting author.</b>
+            </p>
+            <p>
+            <b>Note for Panels:</b> Panel organizers, please forward this email on to your panelists.
+            </p>
+            <p>
+            <b>Note for Workshop/Associated event organizers:</b> Please forward this email on to presenters
+            and organizers if any are missing who need this Zoom information. If attendees will join your event,
+            the Zoom information will be shown on the VIS website. <b>Do not distribute the Zoom information
+            publicly</b>
+            </p>
+            """ + \
+            self.contributor_info_html(zoom_meeting_info)
 
         # Generate the ICS calendar event attachment
         calendar = self.make_calendar(with_setup_time=True, zoom_info=zoom_meeting_info)
@@ -739,7 +949,7 @@ class Session:
         alternative_text = """{schedule}
         Zoom URL: {zoom_url}
         Zoom ID: {zoom_id}
-        Zoom password: {zoom_password}
+        Zoom Password: {zoom_password}
         Discord URL: {discord_url}""".format(schedule=str(self),
             zoom_url=self.timeslot_entry(0, "Zoom URL").value,
             zoom_id=self.timeslot_entry(0, "Zoom Meeting ID").value,
@@ -747,7 +957,7 @@ class Session:
             discord_url=self.timeslot_entry(0, "Discord Link").value)
 
         send_html_email(subject, email_body, list(recipients), self.auth.email,
-                alternative_text=alternative_text, attachments=attachments)
+                cc_recipients=cc_recipients, alternative_text=alternative_text, attachments=attachments)
         return len(recipients)
 
     def discord_embed_dict(self):
@@ -756,8 +966,9 @@ class Session:
 
         # TODO: Manage Discord Embed size limits: https://discordjs.guide/popular-topics/embeds.html#embed-limits
         # Will we actually hit these? Can finish test scheduling the week and if not, ignore it for now
-        if self.timeslot_entry(0, "Youtube Broadcast").value:
-            embed["description"] = "Youtube URL: " + self.timeslot_entry(0, "Youtube Broadcast").value
+        #if self.timeslot_entry(0, "Youtube Broadcast").value:
+        #track = self.timeslot_entry(0, "Computer").value
+        #embed["description"] = "Room URL: " + "TODO WILL WE NEED URL, room = " + str(track)
 
         session_time = self.session_time()
         embed["fields"].append({
@@ -777,6 +988,13 @@ class Session:
                 "value": self.timeslot_entry(0, "Chair(s)").value.replace("|", ", "),
                 "inline": False
             })
+
+        track = self.get_track()
+        embed["fields"].append({
+            "name": "Room link",
+            "value": f"https://virtual.ieeevis.org/year/2021/room_room{track}.html",
+            "inline": False
+        })
 
         for t in self.timeslots:
             time = self.day.entry(t, "Time Slot").value
@@ -863,12 +1081,10 @@ class Session:
             text += "\nEvent Webpage: {}".format(self.timeslot_entry(0, "Event URL").value)
 
         # NOTE: You'll want to replace this with the link to your conference session page
-        text += "\nSession Webpage: https://virtual.ieeevis.org/session_{}.html".format(self.timeslot_entry(0, "Session ID").value)
+        text += "\nSession Webpage: https://virtual.ieeevis.org/year/2021/session_{}.html".format(self.timeslot_entry(0, "Session ID").value)
 
         text += "\nSession start: " + format_time(session_time[0]) + \
                 "\nSession end: " + format_time(session_time[1])
-        if self.timeslot_entry(0, "Youtube Broadcast").value:
-            text += "\nYoutube URL: " + self.timeslot_entry(0, "Youtube Broadcast").value
 
         if self.timeslot_entry(0, "Discord Link").value:
             text += "\nDiscord Link: " + self.timeslot_entry(0, "Discord Link").value

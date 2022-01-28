@@ -14,7 +14,8 @@ import core.excel_db as excel_db
 # encoding errors. The script will also automatically check each video meets
 # certain criteria (resolution, encoding, length).
 
-match_presentation = re.compile(".*\.(mp4|mov)$")
+match_presentation = re.compile("[^\\.].*_[pP]resentation.*")
+#match_presentation = re.compile(".*\\.(mp4|mov|mkv)$")
 
 USAGE ="""
 Usage: assign_sv_videos.py already_assigned_list.json video_root_dir warnings_output.xlsx suffix [max talk length (minutes)]
@@ -39,8 +40,7 @@ class EncodingWarning(Enum):
     VIDEO_TOO_LONG = 7
 
     def is_error(self):
-        return self == EncodingWarning.RESOLUTION or self == EncodingWarning.MISSING_SUBTITLES \
-                or self == EncodingWarning.CORRUPT or self == EncodingWarning.VIDEO_TOO_LONG
+        return self == EncodingWarning.CORRUPT or self == EncodingWarning.VIDEO_TOO_LONG
 
 class Video:
     def __init__(self, filepath, mediainfo):
@@ -73,6 +73,7 @@ class Video:
             warnings.append(EncodingWarning.VIDEO_CODEC)
         if video.audio_codec != "AAC":
             warnings.append(EncodingWarning.AUDIO_CODEC)
+        # TODO: Videos should also be checked for a min length
         if video.length > max_talk_length:
             warnings.append(EncodingWarning.VIDEO_TOO_LONG)
 
@@ -108,7 +109,13 @@ warnings_table.set_index(["video", "container", "resolution", "video_codec", "au
 unassigned_videos = []
 video_root_path = os.path.normpath(sys.argv[2])
 for path, dirs, files in os.walk(video_root_path):
+    if "sv_assignments" in path:
+        print(f"skipping {path}")
+        continue
     for f in files:
+        ext = os.path.splitext(f)[1]
+        if ext == ".srt" or ext == ".sbv":
+            continue
         m = match_presentation.match(f)
         if m:
             filename = os.path.join(path, f)
@@ -120,7 +127,7 @@ for path, dirs, files in os.walk(video_root_path):
                 mi = pymediainfo.MediaInfo.parse(filename)
                 video_track = len([t for t in mi.tracks if t.track_type == "Video"]) != 0
                 if not video_track:
-                    #print("Skipping non-video {}".format(filename))
+                    print(f"WARNING {filename} matched presentation but didn't have video track! Is it corrupt?")
                     continue
 
                 video = Video(filename, mi)
@@ -227,6 +234,7 @@ for i in range(len(volunteers)):
             if subtitles_path:
                 archive.write(subtitles_path, arcname=subtitles_relpath)
 
+    # TODO: Generate row of "Needs escalation or fixing"
     last_row = ws.table.max_row
     ws.entry(last_row + 1, 1).value = "Total Task Time: {}minutes".format(round(task_length / 60))
     ws.entry(last_row + 1, 1).style = "Headline 1"
