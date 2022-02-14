@@ -142,3 +142,5 @@ firebase_data*.json
 poster_list.json
 firebase_sessions/
 timestamps/
+/.vs
+/SUPERMINISTREAM_AUTH_FILE.json

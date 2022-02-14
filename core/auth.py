@@ -23,38 +23,49 @@ from google.auth.transport.requests import Request
 #        "region": ""
 #    },
 #    "discord": {...},
+#    "dropbox" : {
+#       "access_token" : ""
+#    },
 #    "google": {
 #        "installed": {...}
 #    },
 #    "zoom": {
-#        "jwt_token": {...}
+#        "jwt_token": ""
 #    },
-#    "eventbrite": ""
-#    "eventbrite_event_id": <number>
+#    "eventbrite": "",
+#    "eventbrite_event_id": <number>,
 #    "auth0": {
 #        "client_id": "",
 #        "client_secret": "",
 #        "audience": "",
 #        "connection_id": ""
+#    }
 # }
 class Authentication:
     def __init__(self, youtube=False, email=False, use_pickled_credentials=False,
             eventbrite_api=False,
             auth0_api=False):
         # Setup API clients
-        if not "SUPERMINISTREAM_AUTH_FILE" in os.environ:
-            print("You must set $SUPERMINISTREAM_AUTH_FILE to the json file containing your authentication credentials")
+        auth_file = ""
+        if "SUPERMINISTREAM_AUTH_FILE" in os.environ:
+            auth_file = os.environ["SUPERMINISTREAM_AUTH_FILE"]
+        else:
+            auth_file = "./SUPERMINISTREAM_AUTH_FILE.json"
+
+        if not os.path.isfile(auth_file):
+            print("Could not find the SUPERMINISTREAM_AUTH_FILE.json file containing the authentication credentials. Put the file in the working directory or provide its path by setting the env variable $SUPERMINISTREAM_AUTH_FILE")
             sys.exit(1)
 
         if youtube and not "YOUTUBE_AUTH_PICKLE_FILE" in os.environ:
             print("You must set $YOUTUBE_AUTH_PICKLE_FILE to the Youtube pickled auth file")
             sys.exit(1)
 
-        auth_file = os.environ["SUPERMINISTREAM_AUTH_FILE"]
+        
         with open(auth_file, "r") as f:
             auth = json.load(f)
             self.discord = auth["discord"]
-
+            self.dropbox = auth["dropbox"]
+                
             self.zoom = {
                 "authorization": "Bearer {}".format(auth["zoom"]["jwt_token"]),
                 "content-type": "application/json"
