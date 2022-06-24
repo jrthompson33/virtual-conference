@@ -1,6 +1,14 @@
 {
-	"paper_dropbox_requests" : {
-		"title" : "IEEE VIS 2022 Upload Request for {UID}",
-		"description" : "Please upload all the material for {UID} that has been requested."
-	}
+	"paper_dropbox_requests": {
+		"title": "IEEE VIS 2022 Upload Request for {UID}",
+		"description": "Please upload all the material for {UID} that has been requested."
+	},
+  "email_template_test": {
+    "sender": "IEEE VIS <no-reply@ieeevis.org>",
+    "recipient": "",
+    "recipient_attribute": "Contributor Email(s)",
+    "subject": "Some Test Mail for Paper {UID}",
+    "body_text": "We regret to inform you that your request for paper {Title} has not been granted",
+    "body_html": "<html><head></head><body><h1>Hello</h1><p>We regret to inform you that your request for paper {Title} has not been granted</p></body></html>"
+  } 
 }

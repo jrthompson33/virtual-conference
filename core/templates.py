@@ -10,6 +10,13 @@ def load_templates_dict() -> dict:
         "paper_dropbox_requests" : {
             "title" : "...",
             "description" : "..."
+        },
+        "email_template_1" : {
+            "sender" : "",
+            "recipient" : "",
+            "subject" : "",
+            "body_text" : "",
+            "body_html" : ""
         }
     }
     """
