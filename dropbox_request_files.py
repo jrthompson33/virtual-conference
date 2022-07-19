@@ -71,6 +71,26 @@ def create_folder_requests(dbx : dropbox.Dropbox, title : str,  names : List[str
 
     return res
 
+def create_folders(dbx : dropbox.Dropbox, names : List[str], create_root_folder : bool = True):
+    """creates dropbox folders <root_folder>/<name>.
+    names: list of folder names that should be created
+    create_root_folder: can be set to False to avoid checking availability of root folder
+    """
+    
+    if create_root_folder and create_folder(dbx, root_folder):
+        print("root folder created")
+    
+    for name in names:
+        try:
+            p = f"{root_folder}/{name}"
+            if create_folder(dbx, p):
+                print(f"created folder {p}")
+        except Exception as ex:
+            print(f"the following exception has occurred: {ex}")            
+            return
+
+    return
+
 def create_paper_request(dbx : dropbox.Dropbox, paper : dict, template : dict, deadline : FileRequestDeadline = None) -> dict:
     """Creates dropbox upload request link for specified paper (csv row as dict).
     Saves link and id to paper dict.
@@ -119,11 +139,31 @@ def create_paper_requests(dbx : dropbox.Dropbox, papers_csv_file : str, event_pr
         print(f"    saved. Waiting 10s...")
         time.sleep(10)
     
+def create_paper_folders(dbx : dropbox.Dropbox, papers_csv_file : str, event_prefix : str = None):
+    """Creates dropbox folders for upload request links.
+
+    papers_csv_file: required CSV file with paper information
+    event_prefix: if not None, only papers/items with that event prefix will be handled
+
+    """
+    papersDb = PapersDatabase(papers_csv_file)
+    papers = papersDb.data
+    if event_prefix:
+        papers = list(filter(lambda p: p["Event Prefix"] == event_prefix, papers))
+    print(f"{len(papersDb.data)} papers loaded, of which {len(papers)} will be processed.")
+
+    for i in range(len(papers)):
+        paper = papers[i]
+        print(f"paper {i+1}/{len(papers)} {paper['UID']}")
+        create_folders(dbx, [paper['UID'] ])
+        print(f"    Waiting 1s...")
+        time.sleep(1)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Script to create dropbox file requests automatically.')
     
     parser.add_argument('--create', help='create paper upload requests and update paper db', action='store_true', default=False)
+    parser.add_argument('--folders', help='only create folders for future paper upload requests', action='store_true', default=False)
     parser.add_argument('--test', help='test credentials by returning current user account', action='store_true', default=False)
 
     parser.add_argument('--root_folder', help='parent folder in the dropbox for uploads', default="/ieeevis_uploads")
@@ -145,6 +185,8 @@ if __name__ == '__main__':
             print(acc)
         elif args.create:
             create_paper_requests(dbx, args.papers_csv_file, args.event_prefix)
+        elif args.folders:
+            create_paper_folders(dbx, args.papers_csv_file, args.event_prefix)
         #test folder requests
         #requests = create_folder_requests(dbx, "IEEE VIS Upload", ["v01", "v02"], description="Please upload your video and materials here.")
         #print(requests)
