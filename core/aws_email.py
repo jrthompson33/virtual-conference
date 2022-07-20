@@ -9,7 +9,6 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
-from papers_db import PapersDatabase
 
 
 def send_aws_email(session : Authentication, sender: str, recipients: List[str], subject : str, body_text : str, body_html : str = None,
@@ -67,7 +66,7 @@ def _get_recipients_from_template(paper : dict, template : dict) -> Tuple[list,l
     """
     attribute = template["recipient_attribute"]
     if attribute and len(attribute) > 0:
-        recipients = item[attribute].split("|")
+        recipients = paper[attribute].split("|")
     else:
         recipients = [ template["recipient"].format(**paper) ]   
     return recipients, []
