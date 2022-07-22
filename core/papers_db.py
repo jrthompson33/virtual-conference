@@ -17,7 +17,7 @@ class PapersDatabase:
         self.data_by_uid : dict = {}
         if not os.path.isfile(csv_file):
             raise RuntimeError(f"Could not find the specified csv_file '{csv_file}'")
-        with open(csv_file, 'r') as f:
+        with open(csv_file, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             self.fieldnames = reader.fieldnames
             for row in reader:
