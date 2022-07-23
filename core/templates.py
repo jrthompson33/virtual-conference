@@ -20,6 +20,6 @@ def load_templates_dict() -> dict:
         }
     }
     """
-    with open("template_strings.json", "r") as f:
-        dct = json.load(f)
+    with open("template_strings.json", "r", encoding='utf-8') as f:
+        dct = json.load(f, )
         return dct
