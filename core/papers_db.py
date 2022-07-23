@@ -35,7 +35,7 @@ class PapersDatabase:
         if not target_fn:
             target_fn = self.csv_file
         temp_fn = target_fn + str(uuid.uuid4())
-        with open(temp_fn, 'w', newline='') as f:
+        with open(temp_fn, 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, self.fieldnames)
             writer.writeheader()
             writer.writerows(self.data)
