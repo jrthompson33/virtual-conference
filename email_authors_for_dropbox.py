@@ -16,9 +16,14 @@ def send_emails_to_authors(auth: Authentication, papers_csv_file: str, event_pre
     """
     papersDb = PapersDatabase(papers_csv_file)
     templates = load_templates_dict()
-    template = templates["upload_request"]
-    papers = list(filter(lambda p: p["Event Prefix"] == event_prefix, papersDb.data))
-    
+    if event_prefix == "v-cga" or event_prefix == "v-tvcg":
+        template = templates["upload_request_tvcg_cga"]
+    else:
+        template = templates["upload_request"]
+
+    papers = list(
+        filter(lambda p: p["Event Prefix"] == event_prefix, papersDb.data))
+
     print(f"{len(papersDb.data)} total papers loaded, filtered for {event_prefix}, for which {len(papers)} papers will be processed.")
 
     for i in range(len(papers)):
