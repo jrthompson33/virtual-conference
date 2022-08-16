@@ -39,6 +39,12 @@ from google.auth.transport.requests import Request
 #        "client_secret": "",
 #        "audience": "",
 #        "connection_id": ""
+#    },
+#    "cvent": {
+#       "account": "",
+#       "username": "",
+#       "password": "",
+#       "evtstub": ""
 #    }
 # }
 class Authentication:
@@ -65,6 +71,7 @@ class Authentication:
             auth = json.load(f)
             self.discord = auth["discord"]
             self.dropbox = auth["dropbox"]
+            self.cvent = auth["cvent"]
                 
             self.zoom = {
                 "authorization": "Bearer {}".format(auth["zoom"]["jwt_token"]),
