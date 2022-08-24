@@ -7,7 +7,7 @@ import argparse
 import time
 
 
-def send_emails_to_authors(auth: Authentication, papers_csv_file: str, event_prefix: str):
+def send_emails_to_authors(auth: Authentication, papers_csv_file: str, event_prefix: str, email_template: str):
     """send email for papers .
     authentication: Authentication instance in which aws ses client was authenticated
     papers_csv_file: path to papers db file
@@ -16,10 +16,24 @@ def send_emails_to_authors(auth: Authentication, papers_csv_file: str, event_pre
     """
     papersDb = PapersDatabase(papers_csv_file)
     templates = load_templates_dict()
-    if event_prefix == "v-cga" or event_prefix == "v-tvcg":
-        template = templates["upload_request_tvcg_cga"]
-    else:
-        template = templates["upload_request"]
+    if email_template == "upload_request":
+        if event_prefix == "v-cga" or event_prefix == "v-tvcg":
+            template = templates["upload_request_tvcg_cga"]
+        elif event_prefix == "a-ldav" or event_prefix == "a-vizsec" or event_prefix == "a-vds":
+            template = templates["upload_request_symposia"]
+        elif event_prefix == "a-visap":
+            template = templates["upload_request_visap"]
+        elif event_prefix == "w-topoinvis" or event_prefix == "w-trex" or event_prefix == "w-visguides" or event_prefix == "w-vis4good" or event_prefix == "w-testvis" or event_prefix == "w-beliv" or event_prefix == "w-vis4dh":
+            template = templates["upload_request_workshop_xplore"]
+        elif event_prefix == "w-altvis" or event_prefix == "w-biomedicalai" or event_prefix == "w-nlviz" or event_prefix == "w-viscomm" or event_prefix == "w-vis4climate" or event_prefix == "w-visxai":
+            template = templates["upload_request_workshop_no_xplore"]
+        else:
+            template = templates["upload_request"]
+    elif email_template == "missing_preview":
+        if event_prefix == "v-cga" or event_prefix == "v-tvcg":
+            template = templates["missing_preview_tvcg_cga"]
+        else:
+            template = templates["missing_preview"]
 
     papers = list(
         filter(lambda p: p["Event Prefix"] == event_prefix, papersDb.data))
@@ -48,6 +62,8 @@ if __name__ == '__main__':
         '--papers_csv_file', help='path to papers db CSV file', default="ieeevis_papers_db.csv")
     parser.add_argument(
         '--event_prefix', help='filter papers that match the event prefix', default=None)
+    parser.add_argument(
+        '--email_template', help='template to use for the email (e.g., \"upload_request\", \"missing_preview\")', default="upload_request")
 
     args = parser.parse_args()
     auth = Authentication(email=True)
@@ -61,4 +77,4 @@ if __name__ == '__main__':
         # send emails only if event_prefix provided, never send all db
         if args.event_prefix is not None:
             send_emails_to_authors(
-                auth, args.papers_csv_file, args.event_prefix)
+                auth, args.papers_csv_file, args.event_prefix, args.email_template)
