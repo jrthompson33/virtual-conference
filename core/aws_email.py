@@ -1,6 +1,7 @@
 """script that provides functions for sending mails with Amazon's Simple Email Service
 """
 
+from functools import cached_property
 import boto3
 from typing import List, Tuple
 from core.auth import Authentication
@@ -66,9 +67,15 @@ def _get_recipients_from_template(paper : dict, template : dict) -> Tuple[list,l
     """
     attribute = template["recipient_attribute"]
     if attribute and len(attribute) > 0:
-        recipients = paper[attribute].split("|")
+        r_str = paper[attribute]
+        if type(r_str) != str or len(r_str) == 0:
+            return [], [] #empty field
+        recipients = r_str.split("|")
     else:
-        recipients = [ template["recipient"].format(**paper) ]   
+        r_str = template["recipient"]
+        if type(r_str) != str or len(r_str) == 0:
+            return [], [] #empty field
+        recipients = [ r_str.format(**paper) ]   
     return recipients, []
 
 
@@ -90,6 +97,9 @@ def send_aws_email_paper(session : Authentication, paper : dict, template : dict
       } 
     """
     recipients, cc_recipients = _get_recipients_from_template(paper, template)
+    if len(recipients) == 0 and len(cc_recipients) == 0:
+        print(f"skipping paper '{paper['UID']}' with zero recipients")
+        return
     sender = template["sender"].format(**paper)
     subject = template["subject"].format(**paper)
     body_text = template["body_text"].format(**paper)
