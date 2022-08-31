@@ -62,10 +62,10 @@ class Authentication:
             print("Could not find the SUPERMINISTREAM_AUTH_FILE.json file containing the authentication credentials. Put the file in the working directory or provide its path by setting the env variable $SUPERMINISTREAM_AUTH_FILE")
             sys.exit(1)
 
-        if youtube and not "YOUTUBE_AUTH_PICKLE_FILE" in os.environ:
-            print("You must set $YOUTUBE_AUTH_PICKLE_FILE to the Youtube pickled auth file")
-            sys.exit(1)
-
+        yt_pickle_file = "YOUTUBE_AUTH_PICKLE_FILE.bin"
+        if "YOUTUBE_AUTH_PICKLE_FILE" in os.environ:
+            yt_pickle_file = os.environ["YOUTUBE_AUTH_PICKLE_FILE"]
+                   
         
         with open(auth_file, "r") as f:
             auth = json.load(f)
@@ -88,7 +88,7 @@ class Authentication:
                         region_name=auth["aws"]["region"])
 
             if youtube:
-                self.youtube = self.authenticate_youtube(auth, use_pickled_credentials)
+                self.youtube = self.authenticate_youtube(auth, use_pickled_credentials, yt_pickle_file)
 
             if eventbrite_api:
                 self.eventbrite = eventbrite.Eventbrite(auth["eventbrite"])
@@ -97,15 +97,14 @@ class Authentication:
             if auth0_api:
                 self.auth0 = auth["auth0"]
 
-    def authenticate_youtube(self, auth, use_pickled_credentials):
+    def authenticate_youtube(self, auth, use_pickled_credentials, yt_pickle_file):
         yt_scopes = ["https://www.googleapis.com/auth/youtube",
             "https://www.googleapis.com/auth/youtube.readonly",
             "https://www.googleapis.com/auth/youtube.force-ssl"]
-
-        pickle_file = os.environ["YOUTUBE_AUTH_PICKLE_FILE"]
+                
         credentials = None
-        if use_pickled_credentials and os.path.exists(pickle_file):
-            with open(pickle_file, "rb") as f:
+        if use_pickled_credentials and os.path.exists(yt_pickle_file):
+            with open(yt_pickle_file, "rb") as f:
                 credentials = pickle.load(f)
 
         if not credentials or not credentials.valid:
@@ -117,7 +116,7 @@ class Authentication:
                     auth["google"], yt_scopes).run_local_server()
             # Save the credentials
             if use_pickled_credentials:
-                with open(pickle_file, "wb") as f:
+                with open(yt_pickle_file, "wb") as f:
                     pickle.dump(credentials, f)
 
         return googleapiclient.discovery.build("youtube", "v3", credentials=credentials)
