@@ -30,7 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('--title', help='title of item (e.g., video)', default=None)
     parser.add_argument('--description', help='description of item (e.g., video)', default=None)
     parser.add_argument('--start_time', help='start time of scheduled broadcast in the "%Y-%m-%d %H:%M" format in your local time zone', default=None)
-    parser.add_argument('--path', help='path to file that should be uploaded, e.g.', default=None)
+    parser.add_argument('--path', help='path to file that should be uploaded, e.g. video file', default=None)
 
     
     args = parser.parse_args()
