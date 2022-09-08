@@ -40,6 +40,8 @@ def send_emails_to_authors(auth: Authentication, papers_csv_file: str, event_pre
             template = templates["missing_preview"]
     elif email_template == "presentation_tips":
         template = templates["presentation_tips"]
+    elif email_template == "copyright_delay":
+        template = templates["copyright_delay"]
 
     papers = list(
         filter(lambda p: p["Event Prefix"] == event_prefix, papersDb.data))
@@ -77,7 +79,7 @@ if __name__ == '__main__':
     if args.verify:
         # verify an email account
         acc = auth.email.verify_email_identity(
-            EmailAddress='general_chair@ieeevis.org')
+            EmailAddress='no-reply@ieeevis.org')
         print(acc)
     elif args.send:
         # send emails only if event_prefix provided, never send all db
