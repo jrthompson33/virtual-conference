@@ -173,11 +173,11 @@ class YouTubeHelper:
 
         return None
 
-    def update_video(self, video_id : str, title : str, description : str):
+    def update_video(self, video_id : str, title : str, description : str, privacy : str = "unlisted"):
         #print("Updating\ntitle = {}\nvideo = {}".format(title, video_id))
         title = self.make_youtube_title(title)
         description = self.make_youtube_description(description)
-        upload_response = self.auth.youtube.videos().update(
+        resp = self.auth.youtube.videos().update(
             part="id,snippet,status",
             body = {
                 "id": video_id,
@@ -185,10 +185,15 @@ class YouTubeHelper:
                     "title": title,
                     "description": description,
                     "categoryId": 27 # Category 27 is "education"
+                },
+                "status": {
+                    "selfDeclaredMadeForKids": False,
+                    "embeddable": True,
+                    "privacyStatus": privacy
                 }
             }
         ).execute()
-        return upload_response
+        return resp
 
     def set_video_embeddable(self, video_id : str):
         """Make sure that 'embeddable' is set to True of specified video
@@ -310,6 +315,54 @@ class YouTubeHelper:
                 break
             page_token = items["nextPageToken"]
         return all_items
+
+    def get_videos(self) -> List:
+        """get all videos of associated channel (mine)
+        """
+        all_items = []
+        page_token = None
+        while True:
+            items = self.auth.youtube.search().list(
+                part="id,snippet",
+                maxResults=50,
+                forMine=True,
+                type = "video",
+                pageToken=page_token
+            ).execute()
+            all_items += items["items"]
+            if "nextPageToken" not in items:
+                break
+            page_token = items["nextPageToken"]
+        return all_items
+
+    def get_channel(self) -> List:
+        """get all broadcasts of associated channel (mine)
+        """
+        all_items = []
+        page_token = None
+        while True:
+            items = self.auth.youtube.channels().list(
+                part="id,snippet,contentDetails,status",
+                maxResults=50,
+                mine=True,
+                pageToken=page_token
+            ).execute()
+            all_items += items["items"]
+            if "nextPageToken" not in items:
+                break
+            page_token = items["nextPageToken"]
+        return all_items
+
+    def get_video(self, video_id : str):
+        """get details of a specific video by id
+        """
+        resp = self.auth.youtube.videos().list(
+                part="id,snippet,contentDetails,fileDetails,liveStreamingDetails,player,processingDetails,recordingDetails,statistics,status,suggestions,topicDetails",
+                id = video_id
+            ).execute()
+        if resp['items'] is None or len(resp['items']) != 1:
+            return None
+        return resp['items'][0]
 
     def get_all_playlists(self) -> List:
         """get all playlists of current user

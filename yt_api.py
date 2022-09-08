@@ -15,6 +15,15 @@ if __name__ == '__main__':
     
     parser.add_argument('--playlists', help='retrieve playlists',
                         action='store_true', default=False)
+    
+    parser.add_argument('--videos', help='retrieve videos',
+                        action='store_true', default=False)
+    parser.add_argument('--video', help='retrieve details of one specified video',
+                        action='store_true', default=False)
+    parser.add_argument('--channel', help='retrieve details of channel',
+                        action='store_true', default=False)
+    parser.add_argument('--update_video', help='update details of specified video',
+                        action='store_true', default=False)
     parser.add_argument('--playlists_items', help='retrieve playlists and all items',
                         action='store_true', default=False)
     parser.add_argument('--create_playlist', help='create playlist',
@@ -27,6 +36,7 @@ if __name__ == '__main__':
     parser.add_argument('--upload_video', help='upload video',
                         action='store_true', default=False)
     
+    parser.add_argument('--id', help='id of item (e.g., video)', default=None)
     parser.add_argument('--title', help='title of item (e.g., video)', default=None)
     parser.add_argument('--description', help='description of item (e.g., video)', default=None)
     parser.add_argument('--start_time', help='start time of scheduled broadcast in the "%Y-%m-%d %H:%M" format in your local time zone', default=None)
@@ -55,4 +65,16 @@ if __name__ == '__main__':
         print(json.dumps(res))
     elif args.upload_video:
         res = yt.upload_video(args.path, args.title, args.description)
+        print(json.dumps(res))
+    elif args.channel:
+        res = yt.get_channel()
+        print(json.dumps(res))
+    elif args.videos:
+        res = yt.get_videos()
+        print(json.dumps(res))
+    elif args.video:
+        res = yt.get_video(args.id)
+        print(json.dumps(res))
+    elif args.update_video:
+        res = yt.update_video(args.id, args.title, args.description)
         print(json.dumps(res))
