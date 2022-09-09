@@ -13,23 +13,26 @@ def find_match(papers : PapersDatabase, attendee : CventAttendee, title : str, p
     num_best_scores = 0
     for paper in papers.data:
         score = 0
-        if p_id is not None and (paper['UID'] == p_id or paper['UID'].endswith("-" + p_id)):
-            score += 10
+        if p_id is not None and len(p_id) > 1 and (paper['UID'].lower() == p_id.lower() or paper['UID'].lower().endswith("-" + p_id.lower())):
+            score += 200
         if title is not None:
             fuzz_s = fuzz.ratio(title, paper['Title'])
-            if fuzz_s > 0.5:
-                score += int(fuzz_s*10)
+            if fuzz_s > 60:
+                score += int(fuzz_s)
         authors = paper['Authors'].split("|")
         name = ""
         if attendee:
             name = attendee.first_name + " " + attendee.last_name
-        author_fuzz_s = 0
-        for author in authors:
-            s = fuzz.ratio(author, name)
-            if s > 0.8 and s > author_fuzz_s:
-                author_fuzz_s = s
-        score += author_fuzz_s*5
-        if score == 0:
+            author_fuzz_s = 0
+            for author in authors:
+                if author.lower().startswith(attendee.first_name.lower()) and author.lower().endswith(attendee.last_name.lower()):
+                    author_fuzz_s = 100
+                    break;
+                s = fuzz.ratio(author, name)
+                if s > 80 and s > author_fuzz_s:
+                    author_fuzz_s = s
+            score += int(author_fuzz_s/2)
+        if score <= 0:
             continue
         if score > best_score:
             best_score = score
@@ -37,9 +40,9 @@ def find_match(papers : PapersDatabase, attendee : CventAttendee, title : str, p
             num_best_scores = 1
         elif score == best_score:
             num_best_scores += 1
-    if best_score != -1 and num_best_scores == 1:
-        if best_score < 10:
-            print(f"warning, score of {best_score} for paper {paper['UID']} and attendee {attendee} with hint {title}, {p_id}")
+    if best_score > 75 and num_best_scores == 1:
+        if best_score < 100:
+            print(f"WARNING: score of {best_score} for paper {best_paper['UID']} '{best_paper['Title']}' and attendee {attendee} with hint {title}, {p_id}")
         return best_paper
     return None
         
@@ -57,7 +60,6 @@ if __name__ == '__main__':
     parser.add_argument('--cvent_path', help='path to cvent attendees json file', default="cvent_attendees.json")
     parser.add_argument('--forms_path', help='path to google forms respones csv file', default="VIS 2022 Paper General Information .csv")
     parser.add_argument('--papers_csv_file', help='path to papers db CSV file', default="IEEEVIS_22_Papers_Compact.csv")
-
     
     args = parser.parse_args()
     
@@ -88,6 +90,7 @@ if __name__ == '__main__':
             paper['Google Forms Speaker Mode'] = ""
             paper['Google Forms Speaker Name'] = ""
             paper['Speaker E-Mail'] = ""
+            paper['Speaker Name'] = ""
             paper['Presentation Mode'] = ""
             paper['Preprint URL'] = ""
         #sync cvent stuff
@@ -156,8 +159,10 @@ if __name__ == '__main__':
             cvent_reg_type = paper['Speaker Registration']
             if mode and len(mode) != 0:
                 final_mode = mode
+                paper['Speaker Name'] = paper['Google Forms Speaker Name']
             elif cvent_reg_type and len(cvent_reg_type) != 0 and cvent_reg_type != "both":
                 final_mode = cvent_reg_type
+                paper['Speaker Name'] = paper['Speaker Registration Name']
             paper['Presentation Mode'] = final_mode
 
         print(f"{num_matched} papers matched with cvent, {num_not_matched} could not be matched.")

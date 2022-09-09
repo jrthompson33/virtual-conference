@@ -3,6 +3,7 @@ import csv
 import os
 import json
 import uuid
+import time
 
 class PapersDatabase:
     """
@@ -39,4 +40,9 @@ class PapersDatabase:
             writer = csv.DictWriter(f, self.fieldnames)
             writer.writeheader()
             writer.writerows(self.data)
-        os.replace(temp_fn, target_fn)
+        try:
+            os.replace(temp_fn, target_fn)
+        except PermissionError:
+            time.sleep(2)
+            os.replace(temp_fn, target_fn)
+        
