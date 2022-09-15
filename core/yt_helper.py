@@ -298,6 +298,58 @@ class YouTubeHelper:
 
         return broadcast_info
 
+    def make_broadcast_live(self, broadcast_id : str, stream_key_id : str):
+        """transition broadcast to live, given that stream was already bound to it and is healthy
+        """
+        broadcast_status = self.get_broadcast_status(broadcast_id)
+        # Broadcast could be in the ready state (configured and a stream key was bound),
+        # or in the created state (configured but no stream key attached yet).
+        if broadcast_status != "ready" and broadcast_status != "created":
+            print(f"Broadcast {broadcast_id} is in state {broadcast_status}, and cannot be (re-)made live")
+            return
+
+        # Check the status of the live stream to make sure it's running before we make it live
+        retries = 0
+        stream_status, stream_health = self.get_stream_status(stream_key_id)
+        if stream_status != "active":
+            print(f"Stream (key {stream_key_id}) for" +
+                f"broadcast {broadcast_id} is not active (currently {stream_status})." +
+                "will wait 5s longer for data and retry")
+            time.sleep(5)
+            retries = retries + 1
+            if retries >= 2:
+                print(f"Retried {retries} times and zoom stream is still not live!?")
+
+        if stream_health != "good":
+            print(f"WARNING: Stream on computer (key {stream_key_id}) is active, but not healthy. Health status is {stream_health}")
+
+        # Make the broadcast live. Record the start/end times of this call in case
+        # We need to resync the stream
+        start_transition_call = int(time.time())
+        res = self.set_broadcast_status(broadcast_id, "live")
+        end_transition_call = int(time.time())
+        #self.record_stream_update_timestamp([start_transition_call, end_transition_call])
+        return res
+
+    def stop_and_unbind_broadcast(self, broadcast_id : str):
+        """stop broadcast, make video embeddable, and unbind stream key from it
+        """
+        broadcast_status = self.get_broadcast_status(broadcast_id)
+        if broadcast_status == "complete":
+            print(f"Broadcast {broadcast_id} has already been made complete, skipping redundant transition")
+            return
+
+        if broadcast_status != "live":
+            print(f"Broadcast {broadcast_id} is {broadcast_status}, not live, cannot make complete")
+            return
+
+        res = self.set_broadcast_status(broadcast_id, "complete")
+        #unbind stream key from broadcast for reuse
+        self.bind_stream_to_broadcast(None, broadcast_id)
+        self.set_video_embeddable(broadcast_id)
+        return res
+
+
     def get_broadcasts(self) -> List:
         """get all broadcasts of associated channel (mine)
         """
@@ -305,6 +357,24 @@ class YouTubeHelper:
         page_token = None
         while True:
             items = self.auth.youtube.liveBroadcasts().list(
+                part="id,snippet,contentDetails,status",
+                maxResults=50,
+                mine=True,
+                pageToken=page_token
+            ).execute()
+            all_items += items["items"]
+            if "nextPageToken" not in items:
+                break
+            page_token = items["nextPageToken"]
+        return all_items
+
+    def get_streams(self) -> List:
+        """get all livestreams of associated channel (mine)
+        """
+        all_items = []
+        page_token = None
+        while True:
+            items = self.auth.youtube.liveStreams().list(
                 part="id,snippet,contentDetails,status",
                 maxResults=50,
                 mine=True,

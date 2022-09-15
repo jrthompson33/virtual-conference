@@ -15,6 +15,8 @@ if __name__ == '__main__':
     
     parser.add_argument('--playlists', help='retrieve playlists',
                         action='store_true', default=False)
+    parser.add_argument('--streams', help='retrieve livestreams',
+                        action='store_true', default=False)
     
     parser.add_argument('--videos', help='retrieve videos',
                         action='store_true', default=False)
@@ -32,11 +34,20 @@ if __name__ == '__main__':
     parser.add_argument('--broadcasts', help='retrieve broadcasts',
                         action='store_true', default=False)
     parser.add_argument('--schedule_broadcast', help='schedule broadcast',
+                        action='store_true', default=False)    
+    parser.add_argument('--bind', help='bind stream to broadcast',
+                        action='store_true', default=False)
+    parser.add_argument('--unbind', help='unbind stream from broadcast',
+                        action='store_true', default=False)
+    parser.add_argument('--start_broadcast', help='start broadcast',
+                        action='store_true', default=False)
+    parser.add_argument('--stop_broadcast', help='stop broadcast',
                         action='store_true', default=False)
     parser.add_argument('--upload_video', help='upload video',
                         action='store_true', default=False)
     
     parser.add_argument('--id', help='id of item (e.g., video)', default=None)
+    parser.add_argument('--stream_key', help='id of stream key', default=None)
     parser.add_argument('--title', help='title of item (e.g., video)', default=None)
     parser.add_argument('--description', help='description of item (e.g., video)', default=None)
     parser.add_argument('--start_time', help='start time of scheduled broadcast in the "%Y-%m-%d %H:%M" format in your local time zone', default=None)
@@ -50,6 +61,9 @@ if __name__ == '__main__':
     if args.playlists:
         playlists = yt.get_all_playlists()
         print(json.dumps(playlists))
+    elif args.streams:        
+        res = yt.get_streams()
+        print(json.dumps(res))
     elif args.playlists_items:
         res = yt.get_playlists_and_videos()
         print(json.dumps(res))
@@ -77,4 +91,16 @@ if __name__ == '__main__':
         print(json.dumps(res))
     elif args.update_video:
         res = yt.update_video(args.id, args.title, args.description)
+        print(json.dumps(res))
+    elif args.bind:
+        res = yt.bind_stream_to_broadcast(args.stream_key, args.id)
+        print(json.dumps(res))
+    elif args.unbind:
+        res = yt.bind_stream_to_broadcast(None, args.id)
+        print(json.dumps(res))
+    elif args.start_broadcast:
+        res = yt.make_broadcast_live(args.id, args.stream_key)
+        print(json.dumps(res))
+    elif args.stop_broadcast:
+        res = yt.stop_and_unbind_broadcast(args.id)
         print(json.dumps(res))
