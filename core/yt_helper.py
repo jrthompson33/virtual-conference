@@ -7,7 +7,6 @@ import httplib2
 import time
 from apiclient.http import MediaFileUpload
 from apiclient.errors import HttpError
-import argparse
 from typing import List
 from datetime import timezone, datetime, timedelta
 

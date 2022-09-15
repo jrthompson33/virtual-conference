@@ -45,6 +45,9 @@ from google.auth.transport.requests import Request
 #       "username": "",
 #       "password": "",
 #       "evtstub": ""
+#    },
+#    "gsheets": {
+#       "db_link": ""
 #    }
 # }
 class Authentication:
@@ -72,6 +75,7 @@ class Authentication:
             self.discord = auth["discord"]
             self.dropbox = auth["dropbox"]
             self.cvent = auth["cvent"]
+            self.gsheets = auth["gsheets"]
                 
             self.zoom = {
                 "authorization": "Bearer {}".format(auth["zoom"]["jwt_token"]),
