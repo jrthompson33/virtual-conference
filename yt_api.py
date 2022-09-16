@@ -8,6 +8,41 @@ from datetime import datetime
 from core.yt_helper import YouTubeHelper
 from core.google_sheets import GoogleSheets
 
+def schedule_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
+    """schedule broadcasts from sheet, possibly filtered by dow = Day of Week
+    """
+    broadcasts = GoogleSheets()
+    broadcasts.load_sheet("Broadcasts")
+    data = broadcasts.data
+    print(f"{len(data)} broadcasts loaded")
+    data = list(filter(lambda d: d["Video ID"] == None or len(d["Video ID"].strip()) == 0, data))
+    if args.dow:
+        data = list(filter(lambda d: d["Day of Week"] == args.dow, data))
+    print(f"{len(data)} broadcasts will be scheduled")
+    for broadcast in data:
+        l_id = broadcast["Livestream ID"]
+        title = broadcast["Title"]
+        description = broadcast["Description"]
+        thumbnail_path = broadcast["Thumbnail File Name"]
+        stream_key_id = broadcast["Stream Key ID"]
+        captions_enabled = broadcast["Captions Enabled"] == "y"
+        start_dt = broadcast["Start DateTime"]
+        print(f"\r\nschedule broadcast {l_id} - {title}...")
+        if not start_dt or not start_dt.endswith("Z"):
+            print(f"ERROR: invalid start date time provided, has to be in ISO format, UTC")
+            continue
+        dt = datetime.fromisoformat(start_dt.replace('Z', '+00:00'))
+        res = yt.schedule_broadcast(title, description, dt, enable_captions=captions_enabled)
+        print(json.dumps(res))
+        broadcast_id = res["id"]
+        broadcast["Video ID"] = broadcast_id
+        broadcast["YouTube URL"] = "https://youtu.be/" + broadcast_id
+        broadcasts.save()
+        print(f"\r\nbind stream {stream_key_id} to broadcast {l_id} with id {broadcast_id}...")
+        res = yt.bind_stream_to_broadcast(stream_key_id, broadcast_id)
+        print(json.dumps(res))
+
+
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(
@@ -35,7 +70,9 @@ if __name__ == '__main__':
     parser.add_argument('--broadcasts', help='retrieve broadcasts',
                         action='store_true', default=False)
     parser.add_argument('--schedule_broadcast', help='schedule broadcast',
-                        action='store_true', default=False)    
+                        action='store_true', default=False)
+    parser.add_argument('--schedule_broadcasts', help='schedule and bind broadcasts from sheet',
+                        action='store_true', default=False)
     parser.add_argument('--bind', help='bind stream to broadcast',
                         action='store_true', default=False)
     parser.add_argument('--unbind', help='unbind stream from broadcast',
@@ -53,6 +90,7 @@ if __name__ == '__main__':
     parser.add_argument('--description', help='description of item (e.g., video)', default=None)
     parser.add_argument('--start_time', help='start time of scheduled broadcast in the "%Y-%m-%d %H:%M" format in your local time zone', default=None)
     parser.add_argument('--path', help='path to file that should be uploaded, e.g. video file', default=None)
+    parser.add_argument('--dow', help='day of week for scheduling broadcasts', default=None)
 
     
     args = parser.parse_args()
@@ -78,6 +116,8 @@ if __name__ == '__main__':
         dt = datetime.strptime(args.start_time, "%Y-%m-%d %H:%M")
         res = yt.schedule_broadcast(args.title, args.description, dt)
         print(json.dumps(res))
+    elif args.schedule_broadcasts:
+        schedule_broadcasts(yt, args)
     elif args.upload_video:
         res = yt.upload_video(args.path, args.title, args.description)
         print(json.dumps(res))
