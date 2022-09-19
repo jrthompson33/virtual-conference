@@ -46,7 +46,7 @@ class YouTubeHelper:
             description = description[0:4999]
         return description
 
-    def create_playlist(self, title : str):
+    def create_playlist(self, title : str, desc : str = "", privacy : str = "unlisted"):
         """Create playlist.
 
         Returns something like {
@@ -91,10 +91,11 @@ class YouTubeHelper:
             part="id,status,snippet",
             body={
                 "snippet": {
-                    "title": title
+                    "title": title,
+                    "description": desc
                 },
                 "status": {
-                    "privacyStatus": "unlisted"
+                    "privacyStatus": privacy
                 }
             }).execute()
         return resp

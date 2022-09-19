@@ -42,7 +42,7 @@ def schedule_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
         res = yt.bind_stream_to_broadcast(stream_key_id, broadcast_id)
         print(json.dumps(res))
 
-def populate_pl_sheet(args : argparse.Namespace):
+def populate_ffpl_sheet(args : argparse.Namespace):
     """Enrich sheet "FFPlaylists" with playlists to create based on events and sessions
     """
     sessions = GoogleSheets()
@@ -91,6 +91,27 @@ def populate_pl_sheet(args : argparse.Namespace):
     playlists.save()
     print(f"{num_added} playlist rows added.")
 
+def create_ff_playlists(yt : YouTubeHelper):
+    """Create youtube playlists based on sheet "FFPlaylists"
+    """
+    playlists = GoogleSheets()
+    playlists.load_sheet("FFPlaylists")
+
+    num_added = 0
+    for row in playlists.data:
+        ex_id = row["FF P ID"]
+        if ex_id and len(ex_id) > 0:
+            continue #playlist already created
+        title = row["FF P Title"]
+        desc = row["FF P Description"]
+        print(f"\r\ncreating playlist titled '{title}'...")
+        res = yt.create_playlist(title, desc)
+        print(json.dumps(res))
+        row["FF P ID"] = res["id"]
+        num_added += 1
+        playlists.save()
+
+    print(f"{num_added} playlists created.")
 
 if __name__ == '__main__':
     
@@ -115,6 +136,8 @@ if __name__ == '__main__':
                         action='store_true', default=False)
     parser.add_argument('--create_playlist', help='create playlist',
                         action='store_true', default=False)
+    parser.add_argument('--create_ff_playlists', help='create FF playlists from sheet',
+                        action='store_true', default=False)
     
     parser.add_argument('--broadcasts', help='retrieve broadcasts',
                         action='store_true', default=False)
@@ -134,7 +157,7 @@ if __name__ == '__main__':
                         action='store_true', default=False)
 
     
-    parser.add_argument('--populate_pl_sheet', help='populate playlists sheet based on events and sessions',
+    parser.add_argument('--populate_ffpl_sheet', help='populate fast forward playlists sheet based on events and sessions',
                         action='store_true', default=False)
     
     parser.add_argument('--id', help='id of item (e.g., video)', default=None)
@@ -199,5 +222,7 @@ if __name__ == '__main__':
     elif args.stop_broadcast:
         res = yt.stop_and_unbind_broadcast(args.id)
         print(json.dumps(res))
-    elif args.populate_pl_sheet:
-        populate_pl_sheet(args)
+    elif args.populate_ffpl_sheet:
+        populate_ffpl_sheet(args)
+    elif args.create_ff_playlists:
+        create_ff_playlists(yt)
