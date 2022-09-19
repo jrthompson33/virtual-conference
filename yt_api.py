@@ -42,6 +42,55 @@ def schedule_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
         res = yt.bind_stream_to_broadcast(stream_key_id, broadcast_id)
         print(json.dumps(res))
 
+def populate_pl_sheet(args : argparse.Namespace):
+    """Enrich sheet "FFPlaylists" with playlists to create based on events and sessions
+    """
+    sessions = GoogleSheets()
+    sessions.load_sheet("Sessions")
+    events = GoogleSheets()
+    events.load_sheet("Events")
+    playlists = GoogleSheets()
+    playlists.load_sheet("FFPlaylists")
+
+    num_added = 0
+
+    #add playlist rows for each event
+    for ev in events.data:
+        src_id = ev["Event Prefix"]
+        if src_id in playlists.data_by_index:
+            continue
+        ev_title = ev["Event"]
+        title = f"{args.venue}: Fast Forwards - {ev_title}"
+        desc = f"Fast forwards for event '{ev_title}'"
+        item = {}
+        item["FF P Source ID"] = src_id
+        item["FF P ID"] = ""
+        item["FF P Title"] = title
+        item["FF P Description"] = desc
+        playlists.data.append(item)
+        playlists.data_by_index[src_id] = item
+        num_added += 1
+
+    #add playlist rows for each session
+    for s in sessions.data:
+        src_id = s["Session ID"]
+        if src_id in playlists.data_by_index:
+            continue
+        s_title = s["Session Title"]
+        title = f"{args.venue}: Fast Forwards - {s_title}"
+        desc = f"Fast forwards for session '{s_title}'"
+        item = {}
+        item["FF P Source ID"] = src_id
+        item["FF P ID"] = ""
+        item["FF P Title"] = title
+        item["FF P Description"] = desc
+        playlists.data.append(item)
+        playlists.data_by_index[src_id] = item
+        num_added += 1
+
+    playlists.save()
+    print(f"{num_added} playlist rows added.")
+
 
 if __name__ == '__main__':
     
@@ -83,6 +132,10 @@ if __name__ == '__main__':
                         action='store_true', default=False)
     parser.add_argument('--upload_video', help='upload video',
                         action='store_true', default=False)
+
+    
+    parser.add_argument('--populate_pl_sheet', help='populate playlists sheet based on events and sessions',
+                        action='store_true', default=False)
     
     parser.add_argument('--id', help='id of item (e.g., video)', default=None)
     parser.add_argument('--stream_key', help='id of stream key', default=None)
@@ -91,6 +144,7 @@ if __name__ == '__main__':
     parser.add_argument('--start_time', help='start time of scheduled broadcast in the "%Y-%m-%d %H:%M" format in your local time zone', default=None)
     parser.add_argument('--path', help='path to file that should be uploaded, e.g. video file', default=None)
     parser.add_argument('--dow', help='day of week for scheduling broadcasts', default=None)
+    parser.add_argument('--venue', help='venue title for titles, descriptions', default="VIS 2022")
 
     
     args = parser.parse_args()
@@ -145,3 +199,5 @@ if __name__ == '__main__':
     elif args.stop_broadcast:
         res = yt.stop_and_unbind_broadcast(args.id)
         print(json.dumps(res))
+    elif args.populate_pl_sheet:
+        populate_pl_sheet(args)

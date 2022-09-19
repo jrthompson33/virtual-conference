@@ -194,7 +194,7 @@ class YouTubeHelper:
         ).execute()
         return resp
 
-    def set_video_embeddable(self, video_id : str):
+    def set_video_embeddable(self, video_id : str, privacy : str = "unlisted"):
         """Make sure that 'embeddable' is set to True of specified video
         (e.g., after live broadcast has stoppped)
         """
@@ -204,6 +204,7 @@ class YouTubeHelper:
                 "id": video_id,
                 "status": {
                     "embeddable": True,
+                    "privacyStatus": privacy
                 }
             }
         ).execute()
@@ -222,7 +223,7 @@ class YouTubeHelper:
                             "name": name
                         }
                     },
-                    media_body=MediaFileUpload(subtitles)
+                    media_body=MediaFileUpload(subtitles_path)
                 ).execute()
         return resp
 
