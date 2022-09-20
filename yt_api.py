@@ -1,4 +1,5 @@
 from pathlib import PurePath, Path
+import pathlib
 import sys
 import os
 import time
@@ -115,6 +116,122 @@ def create_ff_playlists(yt : YouTubeHelper):
 
     print(f"{num_added} playlists created.")
 
+def find_file(path : str, file_name : str) -> pathlib.Path:
+    """find and return file (Path object) with specified name inside folder (recursively)
+    """
+    if not path or len(path) == 0:
+        return None
+    for fp in Path(path).rglob("*" + file_name):
+        if fp.name == file_name:
+            return fp
+    return None
+
+
+def upload_ff_videos(yt : YouTubeHelper, args : argparse.Namespace):
+    """upload fast forwards based on FFVideos sheet and specified path
+    """
+    path = Path(args.path)
+    
+    channel_id = args.channel_id
+    uploads_p_id = "UU" + channel_id[2:]
+
+    playlists = GoogleSheets()
+    playlists.load_sheet("FFPlaylists")
+    ff_videos = GoogleSheets()
+    ff_videos.load_sheet("FFVideos")
+    num_playlists_created = 0
+    num_videos_uploaded = 0
+
+    max_n_uploads = 100
+    if args.max_n_uploads and args.max_n_uploads < max_n_uploads:
+        max_n_uploads = args.max_n_uploads
+    for row in ff_videos.data:
+        ex_id = row["FF Video ID"]
+        if ex_id and len(ex_id) > 0:
+            continue #already uploaded
+        src_id = row["FF Source ID"]
+        print(f"\r\nprocessing {src_id}")
+        video_path = find_file(args.path, row["FF File Name"])
+        subs_path = find_file(args.path, row["FF Subtitles File Name"])
+        thumb_path = find_file(args.path, row["FF Thumbnail File Name"])
+        if not video_path:
+            print(f"ERROR: video not found: {video_path}")
+            continue
+        
+        #upload video
+        print(f"\r\nuploading video {video_path}")
+        v_res = yt.upload_video(str(video_path), row["FF Title"], row["FF Description"])
+        print(json.dumps(v_res))
+        video_id = v_res["id"]
+        row["FF Video ID"] = video_id
+        row["FF Link"] = "https://youtu.be/" + video_id
+        
+        ff_videos.save()
+        num_videos_uploaded += 1
+
+        #make sure all referenced playlists are created
+        playlist_refs = row["FF Playlists"].split("|")
+        
+        for p in playlist_refs:
+            if p not in playlists.data_by_index:
+                print(f"WARNING: could not find playlist {p}")
+                continue
+            p_row = playlists.data_by_index[p]
+            playlist_id = p_row["FF P ID"]
+            if not playlist_id or len(playlist_id) == 0:
+                #we first have to create playlist
+                title = p_row["FF P Title"]
+                desc = p_row["FF P Description"]
+                print(f"\r\ncreating playlist titled '{title}'...")
+                res = yt.create_playlist(title, desc)
+                print(json.dumps(res))
+                p_row["FF P ID"] = res["id"]
+                playlist_id = res["id"]
+                num_playlists_created += 1
+                playlists.save()
+            
+            #add to playlists
+            print(f"\r\nadd video to playlist {playlist_id}")
+            p_res = yt.add_video_to_playlist(playlist_id, video_id)
+            print(json.dumps(p_res))
+            if not p_row["FF P Link"] or len(p_row["FF P Link"]) == 0:
+                #we can now create proper watch link for playlist because we have uploaded first video
+                p_row["FF P Link"] = f"https://www.youtube.com/watch?v={video_id}&list={playlist_id}"
+                playlists.save()
+                                
+        #set thumbnail
+        if thumb_path:
+            print(f"\r\nsetting thumbnail {thumb_path}")
+            t_res = yt.set_thumbnail(video_id, str(thumb_path))
+            print(json.dumps(t_res))
+        #upload captions
+        if subs_path:
+            print(f"\r\nuploading captions {subs_path}")
+            c_res = yt.upload_subtitles(video_id, str(subs_path))
+            print(json.dumps(c_res))
+
+        if num_videos_uploaded >= max_n_uploads:
+            print("max num of uploads reached.")
+            return
+
+        #remove from uploads playlist
+        print(f"\r\nremove video from uploads playlist {uploads_p_id}")
+        for num_try in range(10):
+            print(f"try {num_try}")
+            time.sleep(10)
+            found = False
+            upload_items = yt.get_playlist_items(uploads_p_id, only_first_page=True)
+            for it in upload_items:
+                vid_id = it["contentDetails"]["videoId"]
+                if vid_id == video_id:
+                    d_res = yt.delete_playlist_item(it["id"])
+                    print(json.dumps(d_res))
+                    found = True
+                    break
+            if found:
+                break
+        
+
 def populate_ff_videos(args : argparse.Namespace):
     """populate FFVideos sheet based on videos in specified path
     """
@@ -168,7 +285,7 @@ def populate_ff_videos(args : argparse.Namespace):
         authors :str = paper["Authors"]
         if authors and len(authors) > 0:
             authors = authors.replace("|", ", ")
-        title = f"{args.venue}: Fast Forward - {paper_title}"
+        title = f"{args.venue}: {paper_title} - Fast Forward"
         desc = f"{event_title} Fast Forward: {paper_title}\r\nAuthors: {authors}"
         subs_fn = ""
         thumb_fn = ""
@@ -207,6 +324,8 @@ if __name__ == '__main__':
     
     parser.add_argument('--playlists', help='retrieve playlists',
                         action='store_true', default=False)
+    parser.add_argument('--playlist', help='retrieve playlist',
+                        action='store_true', default=False)
     parser.add_argument('--streams', help='retrieve livestreams',
                         action='store_true', default=False)
     
@@ -219,6 +338,8 @@ if __name__ == '__main__':
     parser.add_argument('--update_video', help='update details of specified video',
                         action='store_true', default=False)
     parser.add_argument('--playlists_items', help='retrieve playlists and all items',
+                        action='store_true', default=False)
+    parser.add_argument('--playlist_items', help='retrieve all playlist items of a playlist',
                         action='store_true', default=False)
     parser.add_argument('--create_playlist', help='create playlist',
                         action='store_true', default=False)
@@ -241,6 +362,8 @@ if __name__ == '__main__':
                         action='store_true', default=False)
     parser.add_argument('--upload_video', help='upload video',
                         action='store_true', default=False)
+    parser.add_argument('--upload_ff_videos', help='upload FF videos in specified path and based on FFVideos sheet',
+                        action='store_true', default=False)
 
     
     parser.add_argument('--populate_ffpl_sheet', help='populate fast forward playlists sheet based on events and sessions',
@@ -249,6 +372,7 @@ if __name__ == '__main__':
                         action='store_true', default=False)
     
     parser.add_argument('--id', help='id of item (e.g., video)', default=None)
+    parser.add_argument('--channel_id', help='id of channel', default=None)
     parser.add_argument('--stream_key', help='id of stream key', default=None)
     parser.add_argument('--title', help='title of item (e.g., video)', default=None)
     parser.add_argument('--description', help='description of item (e.g., video)', default=None)
@@ -256,6 +380,8 @@ if __name__ == '__main__':
     parser.add_argument('--path', help='path to file or directory that should be uploaded, e.g. video file', default=None)
     parser.add_argument('--dow', help='day of week for scheduling broadcasts', default=None)
     parser.add_argument('--venue', help='venue title for titles, descriptions', default="VIS 2022")
+    parser.add_argument('--max_n_uploads', help='maximum number of video uploads', default=10, type=int)
+
 
     
     args = parser.parse_args()
@@ -265,11 +391,17 @@ if __name__ == '__main__':
     if args.playlists:
         playlists = yt.get_all_playlists()
         print(json.dumps(playlists))
+    elif args.playlist:
+        playlists = yt.get_playlist(args.id)
+        print(json.dumps(playlists))
     elif args.streams:        
         res = yt.get_streams()
         print(json.dumps(res))
     elif args.playlists_items:
         res = yt.get_playlists_and_videos()
+        print(json.dumps(res))
+    elif args.playlist_items:
+        res = yt.get_playlist_items(args.id)
         print(json.dumps(res))
     elif args.create_playlist:
         pl = yt.create_playlist(args.title)
@@ -316,3 +448,5 @@ if __name__ == '__main__':
         create_ff_playlists(yt)
     elif args.populate_ff_videos:
         populate_ff_videos(args)
+    elif args.upload_ff_videos:
+        upload_ff_videos(yt, args)

@@ -116,6 +116,15 @@ class YouTubeHelper:
                 }).execute()
         return resp
         
+    def set_thumbnail(self, video_id : str, path : str):
+        """Upload image and set it as thumbnail for video
+        """
+        res = self.auth.youtube.thumbnails().set(
+                videoId=video_id,
+                media_body=MediaFileUpload(path)
+            ).execute()
+        return res
+
     def upload_video(self, path : str, title : str, description : str):
         title = self.make_youtube_title(title)
         description = self.make_youtube_description(description)
@@ -435,6 +444,18 @@ class YouTubeHelper:
             return None
         return resp['items'][0]
 
+    def get_playlist(self, playlist_id : str):
+        """get specific playlist
+        """
+        resp = self.auth.youtube.playlists().list(
+                part="snippet,contentDetails",
+                maxResults=50,
+                id=playlist_id
+            ).execute()
+        if resp['items'] is None or len(resp['items']) != 1:
+            return None
+        return resp['items'][0]
+
     def get_all_playlists(self) -> List:
         """get all playlists of current user
         returns array of the like [
@@ -495,7 +516,7 @@ class YouTubeHelper:
             page_token = playlists["nextPageToken"]
         return all_playlists
 
-    def get_playlist_items(self, playlist_id : str) -> List:
+    def get_playlist_items(self, playlist_id : str, only_first_page : bool = False) -> List:
         """get all items of a playlists
         returns array of the like [
                 {
@@ -547,10 +568,16 @@ class YouTubeHelper:
                 pageToken=page_token
             ).execute()
             all_items += items["items"]
-            if "nextPageToken" not in items:
+            if only_first_page or "nextPageToken" not in items:
                 break
             page_token = items["nextPageToken"]
         return all_items
+
+    def delete_playlist_item(self, playlist_item_id : str):            
+        """Delete specified playlist item
+        """
+        resp = self.auth.youtube.playlistItems().delete(id=playlist_item_id).execute()
+        return resp
 
     def get_playlists_and_videos_compact(self) -> dict:
         """retrieves all playlists and their corresponding items (id only)
