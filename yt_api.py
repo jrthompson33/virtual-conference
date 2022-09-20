@@ -250,6 +250,7 @@ def populate_ff_videos(args : argparse.Namespace):
     items3.load_sheet("ItemsEXT")
     
     num_added = 0
+    to_add = []
     for fp in path.rglob("*.mp4"):        
         print(fp)
         cur_dir = str(fp.parent)
@@ -269,12 +270,19 @@ def populate_ff_videos(args : argparse.Namespace):
         session_id = ""
         ref_playlists = []
         item_uid = uid + "-pres"
+        start_time = ""
+        items_by_index = None
         if item_uid in items1.data_by_index:
-            session_id = items1.data_by_index[item_uid]["Session ID"]
+            items_by_index = items1.data_by_index
         elif item_uid in items2.data_by_index:
-            session_id = items2.data_by_index[item_uid]["Session ID"]
+            items_by_index = items2.data_by_index
         elif item_uid in items3.data_by_index:
-            session_id = items3.data_by_index[item_uid]["Session ID"]
+            items_by_index = items3.data_by_index
+
+        if items_by_index:
+            session_id = items_by_index[item_uid]["Session ID"]
+            start_time = items_by_index[item_uid]["Slot DateTime Start"]
+
         if session_id and len(session_id) > 0 and session_id in playlists.data_by_index:
             ref_playlists.append(session_id)
         event_title = paper["Event"]
@@ -305,13 +313,19 @@ def populate_ff_videos(args : argparse.Namespace):
             "FF Thumbnail File Name" : thumb_fn,
             "FF Title" : title,
             "FF Description" : desc,
+            "Session ID" : session_id,
+            "Slot DateTime Start": start_time,
             "FF Playlists" : "|".join(ref_playlists),
             "FF Video ID" : "",
             "FF Link" : ""
             }
-        ff_videos.data.append(ffvideo)
-        ff_videos.data_by_index[uid] = ffvideo
+        to_add.append(ffvideo)
         num_added += 1
+    #important to add videos in correct order to playlist based on their scheduled time
+    to_add = sorted(to_add, key=lambda it: ( it["Session ID"], it["Slot DateTime Start"]) )
+    for it in to_add:        
+        ff_videos.data.append(it)
+        ff_videos.data_by_index[it["FF Source ID"]] = it
     ff_videos.save()
     print(f"{num_added} rows added.")
 
