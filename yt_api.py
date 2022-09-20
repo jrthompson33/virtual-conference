@@ -1,6 +1,8 @@
+from pathlib import PurePath, Path
 import sys
 import os
 import time
+import glob
 import argparse
 import json
 from datetime import datetime
@@ -113,6 +115,90 @@ def create_ff_playlists(yt : YouTubeHelper):
 
     print(f"{num_added} playlists created.")
 
+def populate_ff_videos(args : argparse.Namespace):
+    """populate FFVideos sheet based on videos in specified path
+    """
+    path = Path(args.path)
+    playlists = GoogleSheets()
+    playlists.load_sheet("FFPlaylists")
+    papers = GoogleSheets()
+    papers.load_sheet("PapersDB")
+    ff_videos = GoogleSheets()
+    ff_videos.load_sheet("FFVideos")
+    items1 = GoogleSheets()
+    items1.load_sheet("ItemsVISPapers-A")
+    items2 = GoogleSheets()
+    items2.load_sheet("ItemsVISSpecial")
+    items3 = GoogleSheets()
+    items3.load_sheet("ItemsEXT")
+    
+    num_added = 0
+    for fp in path.rglob("*.mp4"):        
+        print(fp)
+        cur_dir = str(fp.parent)
+        pure_name = fp.name[:-4] #file name without extension .mp4
+        print("pure: " + pure_name)
+        id_idx = pure_name.find("_")
+        if id_idx == -1:
+            print(f"ERROR: file does not begin with id: '{fp.name}'")
+            continue
+        uid = pure_name[:id_idx]
+        if uid in ff_videos.data_by_index:
+            continue #already present
+        if uid not in papers.data_by_index:
+            print(f"ERROR: could not find paper of file: '{fp.name}'")
+            continue
+        paper = papers.data_by_index[uid]
+        session_id = ""
+        ref_playlists = []
+        item_uid = uid + "-pres"
+        if item_uid in items1.data_by_index:
+            session_id = items1.data_by_index[item_uid]["Session ID"]
+        elif item_uid in items2.data_by_index:
+            session_id = items2.data_by_index[item_uid]["Session ID"]
+        elif item_uid in items3.data_by_index:
+            session_id = items3.data_by_index[item_uid]["Session ID"]
+        if session_id and len(session_id) > 0 and session_id in playlists.data_by_index:
+            ref_playlists.append(session_id)
+        event_title = paper["Event"]
+        event = paper["Event Prefix"]
+        if event and len(event) > 0 and event in playlists.data_by_index:
+            ref_playlists.append(event)
+        paper_title = paper["Title"]
+        authors :str = paper["Authors"]
+        if authors and len(authors) > 0:
+            authors = authors.replace("|", ", ")
+        title = f"{args.venue}: Fast Forward - {paper_title}"
+        desc = f"{event_title} Fast Forward: {paper_title}\r\nAuthors: {authors}"
+        subs_fn = ""
+        thumb_fn = ""
+        prefix = os.path.join(cur_dir, pure_name)
+        if os.path.isfile(prefix + ".srt"):
+            subs_fn = pure_name + ".srt"
+        elif os.path.isfile(prefix + ".sbv"):
+            subs_fn = pure_name + ".sbv"
+        if os.path.isfile(prefix + ".png"):
+            thumb_fn = pure_name + ".png"
+        elif os.path.isfile(prefix + ".jpg"):
+            thumb_fn = pure_name + ".jpg"
+        ffvideo = {          
+            "FF Source ID" : uid,
+            "FF File Name" : fp.name,
+            "FF Subtitles File Name" : subs_fn,
+            "FF Thumbnail File Name" : thumb_fn,
+            "FF Title" : title,
+            "FF Description" : desc,
+            "FF Playlists" : "|".join(ref_playlists),
+            "FF Video ID" : "",
+            "FF Link" : ""
+            }
+        ff_videos.data.append(ffvideo)
+        ff_videos.data_by_index[uid] = ffvideo
+        num_added += 1
+    ff_videos.save()
+    print(f"{num_added} rows added.")
+
+
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(
@@ -159,13 +245,15 @@ if __name__ == '__main__':
     
     parser.add_argument('--populate_ffpl_sheet', help='populate fast forward playlists sheet based on events and sessions',
                         action='store_true', default=False)
+    parser.add_argument('--populate_ff_videos', help='populate fast forward videos sheet based on files in specified folder',
+                        action='store_true', default=False)
     
     parser.add_argument('--id', help='id of item (e.g., video)', default=None)
     parser.add_argument('--stream_key', help='id of stream key', default=None)
     parser.add_argument('--title', help='title of item (e.g., video)', default=None)
     parser.add_argument('--description', help='description of item (e.g., video)', default=None)
     parser.add_argument('--start_time', help='start time of scheduled broadcast in the "%Y-%m-%d %H:%M" format in your local time zone', default=None)
-    parser.add_argument('--path', help='path to file that should be uploaded, e.g. video file', default=None)
+    parser.add_argument('--path', help='path to file or directory that should be uploaded, e.g. video file', default=None)
     parser.add_argument('--dow', help='day of week for scheduling broadcasts', default=None)
     parser.add_argument('--venue', help='venue title for titles, descriptions', default="VIS 2022")
 
@@ -226,3 +314,5 @@ if __name__ == '__main__':
         populate_ffpl_sheet(args)
     elif args.create_ff_playlists:
         create_ff_playlists(yt)
+    elif args.populate_ff_videos:
+        populate_ff_videos(args)
