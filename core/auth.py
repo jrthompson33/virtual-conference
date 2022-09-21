@@ -4,7 +4,7 @@ import sys
 import boto3
 import pickle
 import requests
-import eventbrite
+#import eventbrite
 import google_auth_oauthlib.flow
 import googleapiclient.discovery
 import googleapiclient.errors
@@ -95,10 +95,10 @@ class Authentication:
                 self.youtube = self.authenticate_youtube(auth, use_pickled_credentials, yt_pickle_file)
 
             if eventbrite_api:
-                self.eventbrite = eventbrite.Eventbrite(auth["eventbrite"])
-                self.eventbrite_event_id = auth["eventbrite_event_id"]
-
-            if auth0_api:
+                self.eventbrite = eventbrite.Eventbrite(auth["eventbrite"]) #does not work
+            self.eventbrite_event_id = auth["eventbrite_event_id"]
+            self.eventbrite_token = auth["eventbrite"]
+            if "auth0" in auth:
                 self.auth0 = auth["auth0"]
 
     def authenticate_youtube(self, auth, use_pickled_credentials, yt_pickle_file):

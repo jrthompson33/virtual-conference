@@ -254,7 +254,8 @@ def get_all(transmit_to_auth0, session, logo_attachment, max_new=-1):
     print(f"New registrations processed at {datetime.now()}")
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser = argparse.ArgumentParser(description='Sync Eventbrite with auth0.')
+    parser.add_argument('--list', action="store_true", help='do not start syncing, just retrieve all attendees')
     parser.add_argument('--mail', action="store_true", help='send email for new users')
     parser.add_argument('--auth0', action="store_true", help='send new users to auh0')
     parser.add_argument('--limit', default=-1, type=int, help='maximum number of new users for this run')
@@ -262,15 +263,19 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    session = auth.Authentication(email=args.mail, eventbrite_api=True, auth0_api=True)
+    if args.list:
+        attendees = get_new_eventbrite(auth.Authentication(eventbrite_api=True))
+        print(json.dumps(attendees))
+    else:
+        session = auth.Authentication(email=args.mail, eventbrite_api=True, auth0_api=True)
 
-    logo_attachment = None
-    if args.logo:
-        logo_attachment = load_logo_attachment(args.logo)
+        logo_attachment = None
+        if args.logo:
+            logo_attachment = load_logo_attachment(args.logo)
 
-    while True:
-        print("Checking for new registrations")
-        get_all(args.auth0, session, logo_attachment, args.limit)
-        time.sleep(15 * 60)
+        while True:
+            print("Checking for new registrations")
+            get_all(args.auth0, session, logo_attachment, args.limit)
+            time.sleep(15 * 60)
 
 
