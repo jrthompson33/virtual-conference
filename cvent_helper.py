@@ -81,6 +81,7 @@ if __name__ == '__main__':
         attendees = CventAttendee.attendees_from_file(args.cvent_path)
         papers = PapersDatabase(args.papers_csv_file)
         speakers : List[CventAttendee] = list(filter(lambda it: it.is_speaker, attendees))
+        mail_to_attendee = { at.email.lower() : at for at in attendees }
         num_matched = 0
         num_not_matched = 0
         #first clear columns in case the new data is missing some of the previously present rows
@@ -153,6 +154,8 @@ if __name__ == '__main__':
                     paper['Preprint URL'] = preprint
                 paper['Practitioners'] = row['What type of practitioners would be interested in reading this paper and/or attending your presentation (e.g. simulation scientists, data journalists, data scientists, biologists etc.)?  How could practitioners apply what they learn from this paper to their work?']
                 num_matched_google += 1
+        num_matched_email = 0
+        #collect final data
         for paper in papers.data:
             mode = paper['Google Forms Speaker Mode']
             final_mode = ""
@@ -163,9 +166,31 @@ if __name__ == '__main__':
             elif cvent_reg_type and len(cvent_reg_type) != 0 and cvent_reg_type != "both":
                 final_mode = cvent_reg_type
                 paper['Speaker Name'] = paper['Speaker Registration Name']
+            if final_mode == "" and not cvent_reg_type or len(cvent_reg_type) == 0:
+                #try to match with cvent list via email
+                emails = paper['Contributor Email(s)'].split('|')
+                for email in emails:
+                    if email.lower() in mail_to_attendee:
+                        speaker = mail_to_attendee[email.lower()]
+                        mode = ""
+                        if speaker.num_onsite > 0 and speaker.num_virtual > 0:
+                            mode = ""
+                        elif speaker.num_onsite > 0:
+                            mode = "onsite"
+                            final_mode = "onsite"
+                        elif speaker.num_virtual > 0:
+                            mode = "virtual"
+                            final_mode = "virtual"
+                        if mode != "":
+                            paper['Speaker Registration'] = mode;
+                            paper['Speaker Registration Name'] = f"{speaker.first_name} {speaker.last_name}";
+                            paper['Speaker Name'] = paper['Speaker Registration Name']
+                            num_matched_email += 1
+                        break
             paper['Presentation Mode'] = final_mode
 
         print(f"{num_matched} papers matched with cvent, {num_not_matched} could not be matched.")
         print(f"{num_matched_google} papers matched with google forms responses")
+        print(f"{num_matched_email} papers matched via email address and cvent")
         papers.save()
         print("saved.")

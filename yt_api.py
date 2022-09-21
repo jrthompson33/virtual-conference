@@ -214,6 +214,8 @@ def upload_ff_videos(yt : YouTubeHelper, args : argparse.Namespace):
             print("max num of uploads reached.")
             return
 
+        continue
+
         #remove from uploads playlist
         print(f"\r\nremove video from uploads playlist {uploads_p_id}")
         for num_try in range(10):
