@@ -56,10 +56,28 @@ def get_attendees(session : auth.Authentication):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Eventbrite helper script')
     parser.add_argument('--list', action="store_true", help='retrieve all attendees')
+    parser.add_argument('--stats', action="store_true", help='get stats about attendees')
    
     args = parser.parse_args()
-
+    s = auth.Authentication()
     if args.list:
-        attendees = get_attendees(auth.Authentication())
+        attendees = get_attendees(s)
         print(json.dumps(attendees))
+    if args.stats:
+        #"ticket_class_name"
+        attendees = get_attendees(s)
+        count_dict = {}
+        tot_count = 0
+        for at in attendees:
+            if at["cancelled"]:
+                continue
 
+            if "ticket_class_name" in at:
+                ticket = at["ticket_class_name"]
+                tot_count += 1
+                if ticket not in count_dict:
+                    count_dict[ticket] = 1
+                else:
+                    count_dict[ticket] += 1
+        print(count_dict)
+        print(f"total num attendees: {tot_count}")
