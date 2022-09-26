@@ -23,13 +23,13 @@ def send_emails_to_authors(auth: Authentication, papers_csv_file: str, event_pre
             template = templates["upload_request_symposia"]
         elif event_prefix == "a-visap":
             template = templates["upload_request_visap"]
-        elif event_prefix == "a-vast" or event_prefix == "a-scivis":
+        elif event_prefix == "a-vast" or event_prefix == "a-scivis" or event_prefix == "a-biovischallenge":
             template = templates["upload_request_competition"]
         elif event_prefix == "v-siggraph" or event_prefix == "v-vr":
             template = templates["upload_request_siggraph_vr"]
         elif event_prefix == "w-topoinvis" or event_prefix == "w-trex" or event_prefix == "w-visguides" or event_prefix == "w-vis4good" or event_prefix == "w-testvis" or event_prefix == "w-beliv" or event_prefix == "w-vis4dh":
             template = templates["upload_request_workshop_xplore"]
-        elif event_prefix == "w-altvis" or event_prefix == "w-biomedicalai" or event_prefix == "w-nlviz" or event_prefix == "w-viscomm" or event_prefix == "w-vis4climate" or event_prefix == "w-visxai":
+        elif event_prefix == "w-altvis" or event_prefix == "w-biomedicalai" or event_prefix == "w-nlvis" or event_prefix == "w-viscomm" or event_prefix == "w-vis4climate" or event_prefix == "w-visxai":
             template = templates["upload_request_workshop_no_xplore"]
         elif event_prefix == "v-short" or event_prefix == "v-full":
             template = templates["upload_request"]
@@ -38,10 +38,14 @@ def send_emails_to_authors(auth: Authentication, papers_csv_file: str, event_pre
             template = templates["missing_preview_tvcg_cga"]
         else:
             template = templates["missing_preview"]
+    elif email_template == "missing_urgent":
+        template = templates["missing_urgent"]
     elif email_template == "presentation_tips":
         template = templates["presentation_tips"]
     elif email_template == "copyright_delay":
         template = templates["copyright_delay"]
+    elif email_template == "missing_video":
+        template = templates["missing_video"]
 
     papers = list(
         filter(lambda p: p["Event Prefix"] == event_prefix, papersDb.data))
@@ -79,7 +83,7 @@ if __name__ == '__main__':
     if args.verify:
         # verify an email account
         acc = auth.email.verify_email_identity(
-            EmailAddress='no-reply@ieeevis.org')
+            EmailAddress='tech@ieeevis.org')
         print(acc)
     elif args.send:
         # send emails only if event_prefix provided, never send all db
