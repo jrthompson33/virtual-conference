@@ -6,6 +6,7 @@ from fuzzywuzzy import fuzz
 import csv
 import eventbrite_helper
 import core.auth as auth
+from core.google_sheets import GoogleSheets
 
 def find_match(papers : PapersDatabase, attendee_name : str, attendee_email : str, title : str, p_id : str) -> dict:
     """try to match registration to paper and return matched paper
@@ -87,6 +88,8 @@ if __name__ == '__main__':
         attendees = CventAttendee.attendees_from_file(args.cvent_path)
         papers = PapersDatabase(args.papers_csv_file)
         speakers : List[CventAttendee] = list(filter(lambda it: it.is_speaker, attendees))
+        overrides = GoogleSheets()
+        overrides.load_sheet("PresentationModes")
         mail_to_attendee = { at.email.lower() : at for at in attendees }
         num_matched = 0
         num_matched_ev = 0
@@ -102,6 +105,7 @@ if __name__ == '__main__':
             paper['Speaker Name'] = ""
             paper['Presentation Mode'] = ""
             paper['Preprint URL'] = ""
+            paper['Practitioners'] = ""
         #sync cvent stuff
         for speaker in speakers:
             for paper_hint in speaker.papers:
@@ -188,11 +192,20 @@ if __name__ == '__main__':
                     preprint = preprint.split(' ')[0]
                 if preprint.startswith("http"):
                     paper['Preprint URL'] = preprint
-                paper['Practitioners'] = row['What type of practitioners would be interested in reading this paper and/or attending your presentation (e.g. simulation scientists, data journalists, data scientists, biologists etc.)?  How could practitioners apply what they learn from this paper to their work?']
+                pract : str = row['What type of practitioners would be interested in reading this paper and/or attending your presentation (e.g. simulation scientists, data journalists, data scientists, biologists etc.)?  How could practitioners apply what they learn from this paper to their work?']
+                if pract and len(pract.strip()) > 0:
+                    paper['Practitioners'] = pract.strip()
                 num_matched_google += 1
         num_matched_email = 0
         #collect final data
         for paper in papers.data:
+            uid = paper['UID']
+            if uid in overrides.data_by_index:
+                override = overrides.data_by_index[uid]
+                paper['Speaker Name'] = override['Speaker Name']
+                paper['Speaker E-Mail'] = override['Speaker E-Mail']
+                paper['Presentation Mode'] = override['Presentation Mode']
+                continue
             mode = paper['Google Forms Speaker Mode']
             final_mode = ""
             cvent_reg_type = paper['Speaker Registration']
@@ -206,8 +219,8 @@ if __name__ == '__main__':
                 #try to match with cvent list via email
                 emails = paper['Contributor Email(s)'].split('|')
                 for email in emails:
-                    if email.lower() in mail_to_attendee:
-                        speaker = mail_to_attendee[email.lower()]
+                    if email.strip().lower() in mail_to_attendee:
+                        speaker = mail_to_attendee[email.strip().lower()]
                         mode = ""
                         if speaker.num_onsite > 0 and speaker.num_virtual > 0:
                             mode = ""
