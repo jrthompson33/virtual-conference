@@ -39,13 +39,18 @@ def send_emails_to_authors(auth: Authentication, papers_csv_file: str, event_pre
         else:
             template = templates["missing_preview"]
     elif email_template == "missing_urgent":
-        template = templates["missing_urgent"]
+        if event_prefix == "v-cga" or event_prefix == "v-tvcg" or event_prefix == "v-short" or event_prefix == "v-full":
+            template = templates["missing_urgent"]
+        else:
+            template = templates["missing_urgent_workshop"]
     elif email_template == "presentation_tips":
         template = templates["presentation_tips"]
     elif email_template == "copyright_delay":
         template = templates["copyright_delay"]
     elif email_template == "missing_video":
         template = templates["missing_video"]
+    elif email_template == "reminder_survey":
+        template = templates["reminder_survey"]
 
     papers = list(
         filter(lambda p: p["Event Prefix"] == event_prefix, papersDb.data))
@@ -57,8 +62,9 @@ def send_emails_to_authors(auth: Authentication, papers_csv_file: str, event_pre
         print(f"paper {i+1}/{len(papers)} {paper['UID']}")
         response = send_aws_email_paper(auth, paper, template)
         print(f"    {response}")
-        print(f"    saved. Waiting 2s...")
-        time.sleep(2)
+        if i % 4 == 3:
+            print(f"    saved. Waiting 2s...")
+            time.sleep(2)
 
 
 if __name__ == '__main__':
