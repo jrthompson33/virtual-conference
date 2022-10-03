@@ -63,7 +63,7 @@ def populate_ffpl_sheet(args : argparse.Namespace):
         if src_id in playlists.data_by_index:
             continue
         ev_title = ev["Event"]
-        title = f"{args.venue}: Fast Forwards - {ev_title}"
+        title = f"{ev_title} - Fast Forwards | {args.venue}"
         desc = f"Fast forwards for event '{ev_title}'"
         item = {}
         item["FF P Source ID"] = src_id
@@ -80,7 +80,7 @@ def populate_ffpl_sheet(args : argparse.Namespace):
         if src_id in playlists.data_by_index:
             continue
         s_title = s["Session Title"]
-        title = f"{args.venue}: Fast Forwards - {s_title}"
+        title = f"{s_title} - Fast Forwards | {args.venue}"        
         desc = f"Fast forwards for session '{s_title}'"
         item = {}
         item["FF P Source ID"] = src_id
@@ -295,7 +295,7 @@ def populate_ff_videos(args : argparse.Namespace):
         authors :str = paper["Authors"]
         if authors and len(authors) > 0:
             authors = authors.replace("|", ", ")
-        title = f"{args.venue}: {paper_title} - Fast Forward"
+        title = f"{paper_title} - Fast Forward | {args.venue}"
         desc = f"{event_title} Fast Forward: {paper_title}\r\nAuthors: {authors}"
         subs_fn = ""
         thumb_fn = ""
