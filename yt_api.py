@@ -21,12 +21,28 @@ def schedule_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
     data = list(filter(lambda d: d["Video ID"] == None or len(d["Video ID"].strip()) == 0, data))
     if args.dow:
         data = list(filter(lambda d: d["Day of Week"] == args.dow, data))
-    print(f"{len(data)} broadcasts will be scheduled")
+    
+    num_scheduled = 0
+
+    max_n_schedules = 25
+    if args.max_n_uploads and args.max_n_uploads < max_n_schedules:
+        max_n_schedules = args.max_n_uploads
+    num_to_schedule = len(data)
+    if num_to_schedule > max_n_schedules:
+        num_to_schedule = max_n_schedules
+    print(f"{num_to_schedule} broadcasts will be scheduled")
     for broadcast in data:
-        l_id = broadcast["Livestream ID"]
-        title = broadcast["Title"]
-        description = broadcast["Description"]
-        thumbnail_path = broadcast["Thumbnail File Name"]
+        l_id :str = broadcast["Livestream ID"]
+        title : str = broadcast["Title"]
+        description :str = broadcast["Description"]
+        thumbnail_path : str = broadcast["Thumbnail File Name"]
+        use_thumbnail : bool = False
+        if thumbnail_path and len(thumbnail_path) > 0:
+            if args.path and len(args.path) > 0:
+                thumbnail_path = os.path.join(args.path, thumbnail_path)
+            if os.path.isfile(thumbnail_path):
+                use_thumbnail = True
+
         stream_key_id = broadcast["Stream Key ID"]
         captions_enabled = broadcast["Captions Enabled"] == "y"
         start_dt = broadcast["Start DateTime"]
@@ -35,15 +51,22 @@ def schedule_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
             print(f"ERROR: invalid start date time provided, has to be in ISO format, UTC")
             continue
         dt = datetime.fromisoformat(start_dt.replace('Z', '+00:00'))
-        res = yt.schedule_broadcast(title, description, dt, enable_captions=captions_enabled)
+        res = yt.schedule_broadcast(title, description, dt, 
+                                    enable_captions=captions_enabled, 
+                                    thumbnail_path = thumbnail_path if use_thumbnail else None)
         print(json.dumps(res))
         broadcast_id = res["id"]
         broadcast["Video ID"] = broadcast_id
         broadcast["YouTube URL"] = "https://youtu.be/" + broadcast_id
         broadcasts.save()
+        num_scheduled += 1
         print(f"\r\nbind stream {stream_key_id} to broadcast {l_id} with id {broadcast_id}...")
         res = yt.bind_stream_to_broadcast(stream_key_id, broadcast_id)
         print(json.dumps(res))
+
+        if num_scheduled >= max_n_schedules:
+            print("max num of schedules reached.")
+            return
 
 def populate_ffpl_sheet(args : argparse.Namespace):
     """Enrich sheet "FFPlaylists" with playlists to create based on events and sessions
@@ -64,7 +87,7 @@ def populate_ffpl_sheet(args : argparse.Namespace):
             continue
         ev_title = ev["Event"]
         title = f"{ev_title} - Fast Forwards | {args.venue}"
-        desc = f"Fast forwards for event '{ev_title}'"
+        desc = f"Fast forwards for event '{ev_title}' at {args.venue}"
         item = {}
         item["FF P Source ID"] = src_id
         item["FF P ID"] = ""
@@ -81,7 +104,7 @@ def populate_ffpl_sheet(args : argparse.Namespace):
             continue
         s_title = s["Session Title"]
         title = f"{s_title} - Fast Forwards | {args.venue}"        
-        desc = f"Fast forwards for session '{s_title}'"
+        desc = f"Fast forwards for session '{s_title}' at {args.venue}"
         item = {}
         item["FF P Source ID"] = src_id
         item["FF P ID"] = ""
@@ -213,25 +236,7 @@ def upload_ff_videos(yt : YouTubeHelper, args : argparse.Namespace):
         if num_videos_uploaded >= max_n_uploads:
             print("max num of uploads reached.")
             return
-
-        continue
-
-        #remove from uploads playlist
-        print(f"\r\nremove video from uploads playlist {uploads_p_id}")
-        for num_try in range(10):
-            print(f"try {num_try}")
-            time.sleep(10)
-            found = False
-            upload_items = yt.get_playlist_items(uploads_p_id, only_first_page=True)
-            for it in upload_items:
-                vid_id = it["contentDetails"]["videoId"]
-                if vid_id == video_id:
-                    d_res = yt.delete_playlist_item(it["id"])
-                    print(json.dumps(d_res))
-                    found = True
-                    break
-            if found:
-                break
+        
         
 
 def populate_ff_videos(args : argparse.Namespace):
