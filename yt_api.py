@@ -117,6 +117,55 @@ def populate_ffpl_sheet(args : argparse.Namespace):
     playlists.save()
     print(f"{num_added} playlist rows added.")
 
+def populate_pl_sheet(args : argparse.Namespace):
+    """Enrich sheet "Playlists" with playlists to create based on events and sessions
+    """
+    sessions = GoogleSheets()
+    sessions.load_sheet("Sessions")
+    events = GoogleSheets()
+    events.load_sheet("Events")
+    playlists = GoogleSheets()
+    playlists.load_sheet("Playlists")
+
+    num_added = 0
+
+    #add playlist rows for each event
+    for ev in events.data:
+        src_id = ev["Event Prefix"]
+        if src_id in playlists.data_by_index:
+            continue
+        ev_title = ev["Event"]
+        title = f"{ev_title} - Presentations | {args.venue}"
+        desc = f"Pre-recorded presentations for event '{ev_title}' at {args.venue}"
+        item = {}
+        item["P Source ID"] = src_id
+        item["P ID"] = ""
+        item["P Title"] = title
+        item["P Description"] = desc
+        playlists.data.append(item)
+        playlists.data_by_index[src_id] = item
+        num_added += 1
+
+    #add playlist rows for each session
+    for s in sessions.data:
+        src_id = s["Session ID"]
+        if src_id in playlists.data_by_index:
+            continue
+        s_title = s["Session Title"]
+        title = f"{s_title} - Presentations | {args.venue}"        
+        desc = f"Pre-recorded presentations for session '{s_title}' at {args.venue}"
+        item = {}
+        item["P Source ID"] = src_id
+        item["P ID"] = ""
+        item["P Title"] = title
+        item["P Description"] = desc
+        playlists.data.append(item)
+        playlists.data_by_index[src_id] = item
+        num_added += 1
+
+    playlists.save()
+    print(f"{num_added} playlist rows added.")
+
 def create_ff_playlists(yt : YouTubeHelper):
     """Create youtube playlists based on sheet "FFPlaylists"
     """
@@ -472,6 +521,8 @@ if __name__ == '__main__':
                         action='store_true', default=False)
 
     
+    parser.add_argument('--populate_pl_sheet', help='populate video playlists sheet based on events and sessions',
+                        action='store_true', default=False)
     parser.add_argument('--populate_videos', help='populate videos sheet based on files in specified folder',
                         action='store_true', default=False)
     
@@ -548,6 +599,8 @@ if __name__ == '__main__':
         print(json.dumps(res))
     elif args.populate_ffpl_sheet:
         populate_ffpl_sheet(args)
+    elif args.populate_pl_sheet:
+        populate_pl_sheet(args)
     elif args.create_playlists:
         create_playlists(yt)
     elif args.create_ff_playlists:
