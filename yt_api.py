@@ -102,6 +102,8 @@ def populate_ffpl_sheet(args : argparse.Namespace):
         src_id = s["Session ID"]
         if src_id in playlists.data_by_index:
             continue
+        if s["Track"] == "various":
+            continue #not livestreamed
         s_title = s["Session Title"]
         title = f"{s_title} - Fast Forwards | {args.venue}"        
         desc = f"Fast forwards for session '{s_title}' at {args.venue}"
@@ -151,6 +153,9 @@ def populate_pl_sheet(args : argparse.Namespace):
         src_id = s["Session ID"]
         if src_id in playlists.data_by_index:
             continue
+        if s["Track"] == "various":
+            continue #not livestreamed
+
         s_title = s["Session Title"]
         title = f"{s_title} - Presentations | {args.venue}"        
         desc = f"Pre-recorded presentations for session '{s_title}' at {args.venue}"
