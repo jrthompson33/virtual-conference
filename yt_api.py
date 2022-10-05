@@ -53,7 +53,8 @@ def schedule_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
         dt = datetime.fromisoformat(start_dt.replace('Z', '+00:00'))
         res = yt.schedule_broadcast(title, description, dt, 
                                     enable_captions=captions_enabled, 
-                                    thumbnail_path = thumbnail_path if use_thumbnail else None)
+                                    thumbnail_path = thumbnail_path if use_thumbnail else None,
+                                    enable_auto_start=True)
         print(json.dumps(res))
         broadcast_id = res["id"]
         broadcast["Video ID"] = broadcast_id

@@ -238,12 +238,14 @@ class YouTubeHelper:
         return resp
 
     def schedule_broadcast(self, title : str, description : str, start_time : datetime, enable_captions : bool = False,
-                           thumbnail_png_bytes : io.BytesIO = None, thumbnail_path : str = None):
+                           thumbnail_png_bytes : io.BytesIO = None, thumbnail_path : str = None, 
+                           enable_auto_start : bool = False, privacy : str = "unlisted"):
         """Schedule a broadcast
 
         enable_captions: if True, "closedCaptionsHttpPost" will be used and latencyPreference will be set to "low" instead of "ultraLow"
         thumbnail_png_bytes: optional thumbnail image provided as rendered image bytes
         thumbnail_path: optional thumbnail image, path to file
+        enable_auto_start: if True broadcast will start streaming automatically by scheduled time
         """
         title = self.make_youtube_title(title)
         description = self.make_youtube_description(description)
@@ -258,7 +260,7 @@ class YouTubeHelper:
                     # to enable embedding live streams. You can set this to true if your account
                     # meets this requirement and you've enabled embedding live streams
                     "enableEmbed": True,
-                    "enableAutoStart": False,
+                    "enableAutoStart": enable_auto_start,
                     "enableAutoEnd": False,
                     "recordFromStart": True,
                     "startWithSlate": False,
@@ -275,7 +277,7 @@ class YouTubeHelper:
                     "description": description,
                 },
                 "status": {
-                    "privacyStatus": "unlisted"
+                    "privacyStatus": privacy
                 }
             }
         ).execute()
