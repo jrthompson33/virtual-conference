@@ -11,8 +11,9 @@ from core.auth import Authentication
 from core.google_sheets import GoogleSheets
 
 
+
 def parse_time(t: str):
-    return datetime.strptime(t, "%Y-%m-%d %H:%M:%SZ")
+    return datetime.fromisoformat(t.replace("Z","+00:00"))
 
 
 def format_time_slot(start: datetime, end: datetime):
@@ -24,7 +25,7 @@ def format_time(t: datetime):
 
 
 def format_time_iso8601_utc(t: datetime):
-    return t.astimezone(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool, export_img: bool, export_pdf: bool):
