@@ -139,6 +139,28 @@ def create_ff_playlists(yt : YouTubeHelper):
 
     print(f"{num_added} playlists created.")
 
+def create_playlists(yt : YouTubeHelper):
+    """Create youtube playlists based on sheet "Playlists"
+    """
+    playlists = GoogleSheets()
+    playlists.load_sheet("Playlists")
+
+    num_added = 0
+    for row in playlists.data:
+        ex_id = row["P ID"]
+        if ex_id and len(ex_id) > 0:
+            continue #playlist already created
+        title = row["P Title"]
+        desc = row["P Description"]
+        print(f"\r\ncreating playlist titled '{title}'...")
+        res = yt.create_playlist(title, desc)
+        print(json.dumps(res))
+        row["P ID"] = res["id"]
+        num_added += 1
+        playlists.save()
+
+    print(f"{num_added} playlists created.")
+
 def find_file(path : str, file_name : str) -> pathlib.Path:
     """find and return file (Path object) with specified name inside folder (recursively)
     """
@@ -364,6 +386,8 @@ if __name__ == '__main__':
                         action='store_true', default=False)
     parser.add_argument('--create_playlist', help='create playlist',
                         action='store_true', default=False)
+    parser.add_argument('--create_playlists', help='create video playlists from sheet',
+                        action='store_true', default=False)
     parser.add_argument('--create_ff_playlists', help='create FF playlists from sheet',
                         action='store_true', default=False)
     
@@ -465,6 +489,8 @@ if __name__ == '__main__':
         print(json.dumps(res))
     elif args.populate_ffpl_sheet:
         populate_ffpl_sheet(args)
+    elif args.create_playlists:
+        create_playlists(yt)
     elif args.create_ff_playlists:
         create_ff_playlists(yt)
     elif args.populate_ff_videos:
