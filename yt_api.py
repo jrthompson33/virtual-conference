@@ -308,6 +308,94 @@ def upload_ff_videos(yt : YouTubeHelper, args : argparse.Namespace):
             print("max num of uploads reached.")
             return
         
+
+def upload_videos(yt : YouTubeHelper, args : argparse.Namespace):
+    """upload presentation videos based on Videos sheet and specified path
+    """
+    path = Path(args.path)
+    
+    channel_id = args.channel_id
+    uploads_p_id = "UU" + channel_id[2:]
+
+    playlists = GoogleSheets()
+    playlists.load_sheet("Playlists")
+    videos = GoogleSheets()
+    videos.load_sheet("Videos")
+    num_playlists_created = 0
+    num_videos_uploaded = 0
+
+    max_n_uploads = 100
+    if args.max_n_uploads and args.max_n_uploads < max_n_uploads:
+        max_n_uploads = args.max_n_uploads
+    for row in videos.data:
+        ex_id = row["Video ID"]
+        if ex_id and len(ex_id) > 0:
+            continue #already uploaded
+        src_id = row["Video Source ID"]
+        print(f"\r\nprocessing {src_id}")
+        video_path = find_file(args.path, row["Video File Name"])
+        subs_path = find_file(args.path, row["Video Subtitles File Name"])
+        thumb_path = find_file(args.path, row["Video Thumbnail File Name"])
+        if not video_path:
+            print(f"ERROR: video not found: {video_path}")
+            continue
+        
+        #upload video
+        print(f"\r\nuploading video {video_path}")
+        v_res = yt.upload_video(str(video_path), row["Video Title"], row["Video Description"])
+        print(json.dumps(v_res))
+        video_id = v_res["id"]
+        row["Video ID"] = video_id
+        row["Video Link"] = "https://youtu.be/" + video_id
+        
+        videos.save()
+        num_videos_uploaded += 1
+
+        #make sure all referenced playlists are created
+        playlist_refs = row["Playlists"].split("|")
+        
+        for p in playlist_refs:
+            if p not in playlists.data_by_index:
+                print(f"WARNING: could not find playlist {p}")
+                continue
+            p_row = playlists.data_by_index[p]
+            playlist_id = p_row["P ID"]
+            if not playlist_id or len(playlist_id) == 0:
+                #we first have to create playlist
+                title = p_row["P Title"]
+                desc = p_row["P Description"]
+                print(f"\r\ncreating playlist titled '{title}'...")
+                res = yt.create_playlist(title, desc)
+                print(json.dumps(res))
+                p_row["P ID"] = res["id"]
+                playlist_id = res["id"]
+                num_playlists_created += 1
+                playlists.save()
+            
+            #add to playlists
+            print(f"\r\nadd video to playlist {playlist_id}")
+            p_res = yt.add_video_to_playlist(playlist_id, video_id)
+            print(json.dumps(p_res))
+            if not p_row["P Link"] or len(p_row["P Link"]) == 0:
+                #we can now create proper watch link for playlist because we have uploaded first video
+                p_row["P Link"] = f"https://www.youtube.com/watch?v={video_id}&list={playlist_id}"
+                playlists.save()
+                                
+        #set thumbnail
+        if thumb_path:
+            print(f"\r\nsetting thumbnail {thumb_path}")
+            t_res = yt.set_thumbnail(video_id, str(thumb_path))
+            print(json.dumps(t_res))
+        #upload captions
+        if subs_path:
+            print(f"\r\nuploading captions {subs_path}")
+            c_res = yt.upload_subtitles(video_id, str(subs_path))
+            print(json.dumps(c_res))
+
+        if num_videos_uploaded >= max_n_uploads:
+            print("max num of uploads reached.")
+            return
+        
         
 
 def populate_videos(args : argparse.Namespace):
@@ -513,6 +601,8 @@ if __name__ == '__main__':
                         action='store_true', default=False)
     parser.add_argument('--upload_ff_videos', help='upload FF videos in specified path and based on FFVideos sheet',
                         action='store_true', default=False)
+    parser.add_argument('--upload_videos', help='upload presentation videos in specified path and based on Videos sheet',
+                        action='store_true', default=False)
 
     
     parser.add_argument('--populate_ffpl_sheet', help='populate fast forward playlists sheet based on events and sessions',
@@ -611,3 +701,5 @@ if __name__ == '__main__':
         populate_videos(args)
     elif args.upload_ff_videos:
         upload_ff_videos(yt, args)
+    elif args.upload_videos:
+        upload_videos(yt, args)
