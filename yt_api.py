@@ -261,22 +261,27 @@ def upload_ff_videos(yt : YouTubeHelper, args : argparse.Namespace):
         
         
 
-def populate_ff_videos(args : argparse.Namespace):
-    """populate FFVideos sheet based on videos in specified path
+def populate_videos(args : argparse.Namespace):
+    """populate FFVideos or Videos sheet based on videos in specified path
     """
     path = Path(args.path)
+    is_ff : bool = args.populate_ff_videos
     playlists = GoogleSheets()
-    playlists.load_sheet("FFPlaylists")
+    playlists.load_sheet("FFPlaylists" if is_ff else "Playlists")
     papers = GoogleSheets()
     papers.load_sheet("PapersDB")
+    sessions = GoogleSheets()
+    sessions.load_sheet("Sessions")
     ff_videos = GoogleSheets()
-    ff_videos.load_sheet("FFVideos")
+    ff_videos.load_sheet("FFVideos" if is_ff else "Videos")
     items1 = GoogleSheets()
     items1.load_sheet("ItemsVISPapers-A")
     items2 = GoogleSheets()
     items2.load_sheet("ItemsVISSpecial")
     items3 = GoogleSheets()
     items3.load_sheet("ItemsEXT")
+    events = GoogleSheets()
+    events.load_sheet("Events")
     
     num_added = 0
     to_add = []
@@ -292,38 +297,72 @@ def populate_ff_videos(args : argparse.Namespace):
         uid = pure_name[:id_idx]
         if uid in ff_videos.data_by_index:
             continue #already present
-        if uid not in papers.data_by_index:
-            print(f"ERROR: could not find paper of file: '{fp.name}'")
-            continue
-        paper = papers.data_by_index[uid]
+
         session_id = ""
         ref_playlists = []
-        item_uid = uid + "-pres"
         start_time = ""
-        items_by_index = None
-        if item_uid in items1.data_by_index:
-            items_by_index = items1.data_by_index
-        elif item_uid in items2.data_by_index:
-            items_by_index = items2.data_by_index
-        elif item_uid in items3.data_by_index:
-            items_by_index = items3.data_by_index
+        title = ""
+        desc = ""
 
-        if items_by_index:
-            session_id = items_by_index[item_uid]["Session ID"]
-            start_time = items_by_index[item_uid]["Slot DateTime Start"]
+        is_session_video = False
+        if uid in sessions.data_by_index:
+            is_session_video = True            
+        else:
+            is_session_video = False
+            if uid not in papers.data_by_index:
+                print(f"ERROR: could not find paper of file: '{fp.name}'")
+                continue
+        
+        
+        if is_session_video:
+            session_id = uid
+            session = sessions.data_by_index[uid]
+            start_time = session["DateTime Start"]
+            if session_id in playlists.data_by_index:
+                ref_playlists.append(session_id)
+            event_title = ""
+            event = session["Event Prefix"]
+            if event and len(event) > 0:
+                if event in playlists.data_by_index:
+                    ref_playlists.append(event)
+                for event_row in events.data:
+                    if event_row["Event Prefix"] == event:
+                        event_title = event_row["Event"]
+                        break
+            session_title = session["Session Title"]
+            title = f"{session_title} Session - Fast Forward | {args.venue}" if is_ff else f"{session_title} Session | {args.venue}"
+            desc = f"{event_title} Fast Forward for session {session_title}" if is_ff else f"{event_title}: {session_title}"
 
-        if session_id and len(session_id) > 0 and session_id in playlists.data_by_index:
-            ref_playlists.append(session_id)
-        event_title = paper["Event"]
-        event = paper["Event Prefix"]
-        if event and len(event) > 0 and event in playlists.data_by_index:
-            ref_playlists.append(event)
-        paper_title = paper["Title"]
-        authors :str = paper["Authors"]
-        if authors and len(authors) > 0:
-            authors = authors.replace("|", ", ")
-        title = f"{paper_title} - Fast Forward | {args.venue}"
-        desc = f"{event_title} Fast Forward: {paper_title}\r\nAuthors: {authors}"
+        else:
+            paper = papers.data_by_index[uid]
+            item_uid = uid + "-pres"
+            
+            items_by_index = None
+            if item_uid in items1.data_by_index:
+                items_by_index = items1.data_by_index
+            elif item_uid in items2.data_by_index:
+                items_by_index = items2.data_by_index
+            elif item_uid in items3.data_by_index:
+                items_by_index = items3.data_by_index
+
+            if items_by_index:
+                session_id = items_by_index[item_uid]["Session ID"]
+                start_time = items_by_index[item_uid]["Slot DateTime Start"]
+
+            if session_id and len(session_id) > 0 and session_id in playlists.data_by_index:
+                ref_playlists.append(session_id)
+            event_title = paper["Event"]
+            event = paper["Event Prefix"]
+            if event and len(event) > 0 and event in playlists.data_by_index:
+                ref_playlists.append(event)
+            paper_title = paper["Title"]
+            authors :str = paper["Authors"]
+            if authors and len(authors) > 0:
+                authors = authors.replace("|", ", ")
+            title = f"{paper_title} - Fast Forward | {args.venue}" if is_ff else f"{paper_title} | {args.venue}"
+            desc = f"{event_title} Fast Forward: {paper_title}\r\nAuthors: {authors}" if is_ff else f"{event_title}: {paper_title}\r\nAuthors: {authors}"
+
+
         subs_fn = ""
         thumb_fn = ""
         prefix = os.path.join(cur_dir, pure_name)
@@ -335,26 +374,42 @@ def populate_ff_videos(args : argparse.Namespace):
             thumb_fn = pure_name + ".png"
         elif os.path.isfile(prefix + ".jpg"):
             thumb_fn = pure_name + ".jpg"
-        ffvideo = {          
-            "FF Source ID" : uid,
-            "FF File Name" : fp.name,
-            "FF Subtitles File Name" : subs_fn,
-            "FF Thumbnail File Name" : thumb_fn,
-            "FF Title" : title,
-            "FF Description" : desc,
-            "Session ID" : session_id,
-            "Slot DateTime Start": start_time,
-            "FF Playlists" : "|".join(ref_playlists),
-            "FF Video ID" : "",
-            "FF Link" : ""
-            }
-        to_add.append(ffvideo)
+        if is_ff:
+            ffvideo = {          
+                "FF Source ID" : uid,
+                "FF File Name" : fp.name,
+                "FF Subtitles File Name" : subs_fn,
+                "FF Thumbnail File Name" : thumb_fn,
+                "FF Title" : title,
+                "FF Description" : desc,
+                "Session ID" : session_id,
+                "Slot DateTime Start": start_time,
+                "FF Playlists" : "|".join(ref_playlists),
+                "FF Video ID" : "",
+                "FF Link" : ""
+                }
+            to_add.append(ffvideo)
+        else:
+            video = {          
+                "Video Source ID" : uid,
+                "Video File Name" : fp.name,
+                "Video Subtitles File Name" : subs_fn,
+                "Video Thumbnail File Name" : thumb_fn,
+                "Video Title" : title,
+                "Video Description" : desc,
+                "Session ID" : session_id,
+                "Slot DateTime Start": start_time,
+                "Playlists" : "|".join(ref_playlists),
+                "Video ID" : "",
+                "Video Link" : ""
+                }
+            to_add.append(video)
         num_added += 1
     #important to add videos in correct order to playlist based on their scheduled time
     to_add = sorted(to_add, key=lambda it: ( it["Session ID"], it["Slot DateTime Start"]) )
     for it in to_add:        
         ff_videos.data.append(it)
-        ff_videos.data_by_index[it["FF Source ID"]] = it
+        ff_videos.data_by_index[it["FF Source ID" if is_ff else "Video Source ID"]] = it
     ff_videos.save()
     print(f"{num_added} rows added.")
 
@@ -414,6 +469,10 @@ if __name__ == '__main__':
     parser.add_argument('--populate_ffpl_sheet', help='populate fast forward playlists sheet based on events and sessions',
                         action='store_true', default=False)
     parser.add_argument('--populate_ff_videos', help='populate fast forward videos sheet based on files in specified folder',
+                        action='store_true', default=False)
+
+    
+    parser.add_argument('--populate_videos', help='populate videos sheet based on files in specified folder',
                         action='store_true', default=False)
     
     parser.add_argument('--id', help='id of item (e.g., video)', default=None)
@@ -494,6 +553,8 @@ if __name__ == '__main__':
     elif args.create_ff_playlists:
         create_ff_playlists(yt)
     elif args.populate_ff_videos:
-        populate_ff_videos(args)
+        populate_videos(args)
+    elif args.populate_videos:
+        populate_videos(args)
     elif args.upload_ff_videos:
         upload_ff_videos(yt, args)
