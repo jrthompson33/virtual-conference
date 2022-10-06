@@ -57,6 +57,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Eventbrite helper script')
     parser.add_argument('--list', action="store_true", help='retrieve all attendees')
     parser.add_argument('--stats', action="store_true", help='get stats about attendees')
+    parser.add_argument('--save', action="store_true", help='save all attendees')
+
+    parser.add_argument(
+        '--output_file', help='output file location to save eventbrite_attendees', default="eventbrite_attendees.json")
+    parser.add_argument(
+        '--output_dir', help='output directory location to save', default=".")
    
     args = parser.parse_args()
     s = auth.Authentication()
@@ -81,3 +87,13 @@ if __name__ == '__main__':
                     count_dict[ticket] += 1
         print(count_dict)
         print(f"total num attendees: {tot_count}")
+    if args.save:
+        attendees = get_attendees(s)
+        # Check for output path
+        if not os.path.exists(args.output_dir):
+            os.makedirs(args.output_dir, exist_ok=True)
+
+        with open(os.path.join(args.output_dir, args.output_file), "w", encoding="utf8") as f:
+            json.dump(attendees, f, indent=4)
+
+    
