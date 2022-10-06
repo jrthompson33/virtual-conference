@@ -18,7 +18,7 @@ def schedule_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
     broadcasts.load_sheet("Broadcasts")
     data = broadcasts.data
     print(f"{len(data)} broadcasts loaded")
-    data = list(filter(lambda d: d["Video ID"] == None or len(d["Video ID"].strip()) == 0, data))
+    data = list(filter(lambda d: d["Video ID"] == None or len(d["Video ID"].strip()) == 0 or d["Stream Bound"] != "y", data))
     if args.dow:
         data = list(filter(lambda d: d["Day of Week"] == args.dow, data))
     
@@ -51,19 +51,25 @@ def schedule_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
             print(f"ERROR: invalid start date time provided, has to be in ISO format, UTC")
             continue
         dt = datetime.fromisoformat(start_dt.replace('Z', '+00:00'))
-        res = yt.schedule_broadcast(title, description, dt, 
-                                    enable_captions=captions_enabled, 
-                                    thumbnail_path = thumbnail_path if use_thumbnail else None,
-                                    enable_auto_start=True)
-        print(json.dumps(res))
-        broadcast_id = res["id"]
-        broadcast["Video ID"] = broadcast_id
-        broadcast["YouTube URL"] = "https://youtu.be/" + broadcast_id
-        broadcasts.save()
-        num_scheduled += 1
+
+        if broadcast["Video ID"] == None or len(broadcast["Video ID"].strip()) == 0:
+            res = yt.schedule_broadcast(title, description, dt, 
+                                        enable_captions=captions_enabled, 
+                                        thumbnail_path = thumbnail_path if use_thumbnail else None,
+                                        enable_auto_start=True)
+            print(json.dumps(res))
+            broadcast_id = res["id"]
+            broadcast["Video ID"] = broadcast_id
+            broadcast["YouTube URL"] = "https://youtu.be/" + broadcast_id
+            broadcasts.save()
+            num_scheduled += 1
+        else:
+            broadcast_id = broadcast["Video ID"]
         print(f"\r\nbind stream {stream_key_id} to broadcast {l_id} with id {broadcast_id}...")
         res = yt.bind_stream_to_broadcast(stream_key_id, broadcast_id)
         print(json.dumps(res))
+        broadcast["Stream Bound"] = "y"
+        broadcasts.save()
 
         if num_scheduled >= max_n_schedules:
             print("max num of schedules reached.")
