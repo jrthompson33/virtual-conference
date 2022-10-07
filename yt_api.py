@@ -233,6 +233,16 @@ def find_file(path : str, file_name : str) -> pathlib.Path:
     return None
 
 
+def find_file_by_uid(path : str, uid : str, extension : str) -> pathlib.Path:
+    """find and return file (Path object) with specified uid and extension inside folder (not recursively)
+    """
+    if not path or len(path) == 0:
+        return None
+    for fp in Path(path).glob(f"{uid}_*{extension}"):
+        if fp.name.startswith(uid):
+            return fp
+    return None
+
 def upload_ff_videos(yt : YouTubeHelper, args : argparse.Namespace):
     """upload fast forwards based on FFVideos sheet and specified path
     """
@@ -341,8 +351,10 @@ def upload_videos(yt : YouTubeHelper, args : argparse.Namespace):
         max_n_uploads = args.max_n_uploads
     for row in videos.data:
         ex_id = row["Video ID"]
-        if ex_id and len(ex_id) > 0:
+        captions_uploaded = row["Subtitles Uploaded"] == "y"
+        if ex_id and len(ex_id) > 0 and captions_uploaded:
             continue #already uploaded
+
         src_id = row["Video Source ID"]
         print(f"\r\nprocessing {src_id}")
         video_path = find_file(args.path, row["Video File Name"])
@@ -351,58 +363,64 @@ def upload_videos(yt : YouTubeHelper, args : argparse.Namespace):
         if not video_path:
             print(f"ERROR: video not found: {video_path}")
             continue
-        
-        #upload video
-        print(f"\r\nuploading video {video_path}")
-        v_res = yt.upload_video(str(video_path), row["Video Title"], row["Video Description"])
-        print(json.dumps(v_res))
-        video_id = v_res["id"]
-        row["Video ID"] = video_id
-        row["Video Link"] = "https://youtu.be/" + video_id
-        
-        videos.save()
-        num_videos_uploaded += 1
 
-        #make sure all referenced playlists are created
-        playlist_refs = row["Playlists"].split("|")
+        if not ex_id or len(ex_id) == 0:
+            #upload video
+            print(f"\r\nuploading video {video_path}")
+            v_res = yt.upload_video(str(video_path), row["Video Title"], row["Video Description"])
+            print(json.dumps(v_res))
+            video_id = v_res["id"]
+            row["Video ID"] = video_id
+            row["Video Link"] = "https://youtu.be/" + video_id
         
-        for p in playlist_refs:
-            if p not in playlists.data_by_index:
-                print(f"WARNING: could not find playlist {p}")
-                continue
-            p_row = playlists.data_by_index[p]
-            playlist_id = p_row["P ID"]
-            if not playlist_id or len(playlist_id) == 0:
-                #we first have to create playlist
-                title = p_row["P Title"]
-                desc = p_row["P Description"]
-                print(f"\r\ncreating playlist titled '{title}'...")
-                res = yt.create_playlist(title, desc)
-                print(json.dumps(res))
-                p_row["P ID"] = res["id"]
-                playlist_id = res["id"]
-                num_playlists_created += 1
-                playlists.save()
+            videos.save()
+            num_videos_uploaded += 1
+
+            #make sure all referenced playlists are created
+            playlist_refs = row["Playlists"].split("|")
+        
+            for p in playlist_refs:
+                if p not in playlists.data_by_index:
+                    print(f"WARNING: could not find playlist {p}")
+                    continue
+                p_row = playlists.data_by_index[p]
+                playlist_id = p_row["P ID"]
+                if not playlist_id or len(playlist_id) == 0:
+                    #we first have to create playlist
+                    title = p_row["P Title"]
+                    desc = p_row["P Description"]
+                    print(f"\r\ncreating playlist titled '{title}'...")
+                    res = yt.create_playlist(title, desc)
+                    print(json.dumps(res))
+                    p_row["P ID"] = res["id"]
+                    playlist_id = res["id"]
+                    num_playlists_created += 1
+                    playlists.save()
             
-            #add to playlists
-            print(f"\r\nadd video to playlist {playlist_id}")
-            p_res = yt.add_video_to_playlist(playlist_id, video_id)
-            print(json.dumps(p_res))
-            if not p_row["P Link"] or len(p_row["P Link"]) == 0:
-                #we can now create proper watch link for playlist because we have uploaded first video
-                p_row["P Link"] = f"https://www.youtube.com/watch?v={video_id}&list={playlist_id}"
-                playlists.save()
+                #add to playlists
+                print(f"\r\nadd video to playlist {playlist_id}")
+                p_res = yt.add_video_to_playlist(playlist_id, video_id)
+                print(json.dumps(p_res))
+                if not p_row["P Link"] or len(p_row["P Link"]) == 0:
+                    #we can now create proper watch link for playlist because we have uploaded first video
+                    p_row["P Link"] = f"https://www.youtube.com/watch?v={video_id}&list={playlist_id}"
+                    playlists.save()
                                 
-        #set thumbnail
-        if thumb_path:
-            print(f"\r\nsetting thumbnail {thumb_path}")
-            t_res = yt.set_thumbnail(video_id, str(thumb_path))
-            print(json.dumps(t_res))
+            #set thumbnail
+            if thumb_path:
+                print(f"\r\nsetting thumbnail {thumb_path}")
+                t_res = yt.set_thumbnail(video_id, str(thumb_path))
+                print(json.dumps(t_res))
+        else:
+            video_id = row["Video ID"]
+        
         #upload captions
         if subs_path:
             print(f"\r\nuploading captions {subs_path}")
             c_res = yt.upload_subtitles(video_id, str(subs_path))
             print(json.dumps(c_res))
+            row["Subtitles Uploaded"] = "y"            
+            videos.save()
 
         if num_videos_uploaded >= max_n_uploads:
             print("max num of uploads reached.")
@@ -519,6 +537,15 @@ def populate_videos(args : argparse.Namespace):
             subs_fn = pure_name + ".srt"
         elif os.path.isfile(prefix + ".sbv"):
             subs_fn = pure_name + ".sbv"
+        else:
+            #we might have slightly different naming for subtitles:
+            #subs_p = find_file_by_uid(cur_dir, item_uid, ".srt")
+            #if not subs_p:
+            #    subs_p = find_file_by_uid(cur_dir, item_uid, ".sbv")
+            #if subs_p:
+            #    subs_fn = str(subs_p)
+            print(f"WARNING: {pure_name} does not have a subtitles file!")
+
         if os.path.isfile(prefix + ".png"):
             thumb_fn = pure_name + ".png"
         elif os.path.isfile(prefix + ".jpg"):
