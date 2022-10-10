@@ -4,6 +4,7 @@ import time
 import os
 import json
 import os.path as path
+from typing import List
 import bcrypt  # bcrypt
 import string
 import secrets
@@ -66,6 +67,26 @@ def send_to_auth0(session, filename, access_token, connection_id):
                              headers=headers)
     print(response.content)
 
+def retrieve_users(auth : Authentication, access_token : str) -> List:
+    users = []
+    db = auth.auth0["connection"]
+    cur_page = 0
+    
+    headers = {
+        'Authorization': f"Bearer {access_token}"
+    }
+
+    while True:        
+        url = "https://" + auth.auth0["domain"] + f"/api/v2/users?page={cur_page}&per_page=100&q=identities.connection%3A%22{db}%22&search_engine=v3"
+        print(url)
+        response = requests.get(url, headers=headers).json()
+        if not response or len(response) == 0:
+            break
+        users.extend(response)
+        cur_page += 1
+    return users
+
+
 def send_create_user(auth : Authentication, access_token : str, name : str, email : str, password : str, metadata : dict) -> requests.Response:
     """create user in specified database
     """
@@ -83,9 +104,9 @@ def send_create_user(auth : Authentication, access_token : str, name : str, emai
     }
 
     
-    domain = "https://" + auth.auth0["domain"] + "/api/v2/users"
-    print(domain)
-    response = requests.post(domain, json=payload, headers=headers)
+    url = "https://" + auth.auth0["domain"] + "/api/v2/users"
+    print(url)
+    response = requests.post(url, json=payload, headers=headers)
     print(response.content)
     return response
 
@@ -262,12 +283,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Sync Eventbrite with auth0.')
     parser.add_argument('--test', action="store_true", help='do not start syncing, just retrieve all attendees')
     parser.add_argument('--create_user', action="store_true", help='create user for testing purposes')
+    parser.add_argument('--get_users', action="store_true", help='retrieve all users and store them as a json file')
     # parser.add_argument('--mail', action="store_true", help='send email for new users')
     # parser.add_argument('--auth0', action="store_true", help='send new users to auh0')
     # parser.add_argument('--limit', default=-1, type=int, help='maximum number of new users for this run')
     parser.add_argument("--name", default=None, type=str, help='Name of user to create')
     parser.add_argument("--email", default=None, type=str, help='Email of user')
     parser.add_argument("--token", default=None, type=str, help='access token')
+    parser.add_argument("--output", default=None, type=str, help='name of output file')
 
     args = parser.parse_args()
 
@@ -278,6 +301,19 @@ if __name__ == '__main__':
         auth = Authentication(auth0_api=True)
         token = args.token if args.token else auth.get_auth0_token()
         create_user(auth, token, args.email, args.name)
+    elif args.get_users:
+        if not args.output or len(args.output) == 0:
+            print("output file name has to be specified.")
+            exit(-1)
+        auth = Authentication(auth0_api=True)
+        token = args.token if args.token else auth.get_auth0_token()
+        users = retrieve_users(auth, token)
+        print(f"{len(users)} users retrieved.")
+        users_json = json.dumps(users, indent=4)
+        
+        with open(args.output, "w", newline='', encoding='utf-8') as f:
+            f.write(users_json)
+            
     # else:
     #     session = auth.Authentication(email=args.mail, eventbrite_api=True, auth0_api=True)
 
