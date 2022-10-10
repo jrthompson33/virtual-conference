@@ -10,13 +10,14 @@ import secrets
 import time
 import http.client
 import requests
+import hashlib
 
 from urllib.parse import urlsplit
 from datetime import datetime
 from email.mime.image import MIMEImage
 
 from core.auth import Authentication
-import core.schedule as schedule
+#import core.schedule as schedule
 
 alphabet = string.ascii_letters + string.digits
 
@@ -64,6 +65,38 @@ def send_to_auth0(session, filename, access_token, connection_id):
     response = requests.post(domain, data=payload, files=files,
                              headers=headers)
     print(response.content)
+
+def send_create_user(auth : Authentication, access_token : str, name : str, email : str, password : str, metadata : dict) -> requests.Response:
+    """create user in specified database
+    """
+    payload = {
+        "email": email,
+        "name" : name,
+        "verify_email" : False,
+        "password" : password,
+        "user_metadata" : metadata if metadata else {},
+        "connection": auth.auth0["connection"]
+    }
+    
+    headers = {
+        'Authorization': f"Bearer {access_token}"
+    }
+
+    
+    domain = "https://" + auth.auth0["domain"] + "/api/v2/users"
+    print(domain)
+    response = requests.post(domain, json=payload, headers=headers)
+    print(response.content)
+    return response
+
+def create_user(auth: Authentication, access_token : str, email : str, name : str):
+    """test function to create a user on the specified auth0 database
+    """
+    password = generate_password(email, auth.auth0["password_secret"])
+    print(f"Email: {email}")
+    print(f"Password: {password}")
+    
+    send_create_user(auth, access_token, name, email, password, None)
 
 def test_auth0(auth: Authentication):
     all_new = []
@@ -129,10 +162,15 @@ def get_new_eventbrite(session):
 
     return eventbrite_registrations
 
+def generate_password(email : str, secret : str) -> str:
+    """generates password from email using hash with secret
+    """
+    return hashlib.sha256((email + secret).encode('utf-8')).hexdigest()[:10]
 
-def generate_password_hash() -> bytes:
-    password = ''.join(secrets.choice(alphabet) for i in range(10)).encode("utf-8")
-
+def generate_password_hash() -> bytes:    
+    """hash password with bcrypt to transmit password to auth0 without sharing the actual password
+    """
+    password = ''.join(secrets.choice(alphabet) for i in range(10))
     salt = bcrypt.gensalt(rounds=10)
     password_hash = bcrypt.hashpw(password, salt)
     return password_hash
@@ -223,16 +261,23 @@ def get_all(transmit_to_auth0, session, logo_attachment, max_new=-1):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Sync Eventbrite with auth0.')
     parser.add_argument('--test', action="store_true", help='do not start syncing, just retrieve all attendees')
+    parser.add_argument('--create_user', action="store_true", help='create user for testing purposes')
     # parser.add_argument('--mail', action="store_true", help='send email for new users')
     # parser.add_argument('--auth0', action="store_true", help='send new users to auh0')
     # parser.add_argument('--limit', default=-1, type=int, help='maximum number of new users for this run')
-    # parser.add_argument("--logo", default=None, type=str, help='path to vis 2021 logo')
+    parser.add_argument("--name", default=None, type=str, help='Name of user to create')
+    parser.add_argument("--email", default=None, type=str, help='Email of user')
+    parser.add_argument("--token", default=None, type=str, help='access token')
 
     args = parser.parse_args()
 
     if args.test:
         auth = Authentication(auth0_api=True)
         test_auth0(auth)
+    elif args.create_user:
+        auth = Authentication(auth0_api=True)
+        token = args.token if args.token else auth.get_auth0_token()
+        create_user(auth, token, args.email, args.name)
     # else:
     #     session = auth.Authentication(email=args.mail, eventbrite_api=True, auth0_api=True)
 

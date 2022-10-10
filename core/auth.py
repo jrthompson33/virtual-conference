@@ -132,8 +132,9 @@ class Authentication:
             "audience": self.auth0["audience"],
             "grant_type": "client_credentials"
         }
-        domain = "https://" + urlsplit(self.auth0["audience"]).netloc
-        resp = requests.post(domain + "/oauth/token", json=auth0_payload).json()
+        domain = self.auth0["domain"] #"https://" + urlsplit(self.auth0["audience"]).netloc
+        resp = requests.post("https://" + domain + "/oauth/token", json=auth0_payload).json()
+        print(resp)
         return resp["access_token"]
 
 
