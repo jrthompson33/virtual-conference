@@ -62,5 +62,5 @@ class GoogleSheets:
         try:
             os.replace(temp_fn, target_fn)
         except PermissionError:
-            time.sleep(2)
+            time.sleep(5)
             os.replace(temp_fn, target_fn)
