@@ -510,6 +510,7 @@ def populate_videos(args : argparse.Namespace):
     
     num_added = 0
     to_add = []
+    session_videos_dict = {}
     for fp in path.rglob("*.mp4"):        
         print(fp)
         cur_dir = str(fp.parent)
@@ -556,7 +557,7 @@ def populate_videos(args : argparse.Namespace):
             session_title = session["Session Title"]
             title = f"{session_title} Session - Fast Forward | {args.venue}" if is_ff else f"{session_title} Session | {args.venue}"
             desc = f"{event_title} Fast Forward for session {session_title}" if is_ff else f"{event_title}: {session_title}"
-
+            session_videos_dict[uid] = 1
         else:
             paper = papers.data_by_index[uid]
             item_uid = uid + "-pres"
@@ -649,7 +650,8 @@ def populate_videos(args : argparse.Namespace):
             to_add.append(video)
         num_added += 1
     #important to add videos in correct order to playlist based on their scheduled time
-    to_add = sorted(to_add, key=lambda it: ( it["Session ID"], it["Slot DateTime Start"]) )
+    uid_col_name = "FF Source ID" if is_ff else "Video Source ID"
+    to_add = sorted(to_add, key=lambda it: (1 if it[uid_col_name] in session_videos_dict else 2, it["Session ID"], it["Slot DateTime Start"]) )
     for it in to_add:        
         ff_videos.data.append(it)
         ff_videos.data_by_index[it["FF Source ID" if is_ff else "Video Source ID"]] = it
