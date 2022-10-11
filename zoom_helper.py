@@ -130,7 +130,7 @@ if __name__ == '__main__':
     parser.add_argument("--id", default=None, type=str, help='meeting id')
     parser.add_argument("--event_prefix", default=None, type=str, help='Event prefix to filter for')
     parser.add_argument("--track", default=None, type=str, help='Track id to filter for')
-    parser.add_argument("--disable_dialin", action="store_true", help='Enable dial-in for meetings (requires Pro account)')
+    parser.add_argument("--disable_dialin", action="store_true", default=True, help='Enable dial-in for meetings (requires Pro account)')
 
     args = parser.parse_args()
 
