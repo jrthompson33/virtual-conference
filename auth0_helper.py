@@ -5,7 +5,6 @@ import os
 import json
 import os.path as path
 from typing import List
-import bcrypt  # bcrypt
 import string
 import secrets
 import time
@@ -22,21 +21,6 @@ from core.auth import Authentication
 
 alphabet = string.ascii_letters + string.digits
 
-# def load_logo_attachment(filename):
-#     with open(filename, "rb") as f:
-#         attachment = MIMEImage(f.read())
-#         attachment.add_header("Content-Disposition", "inline", filename=filename)
-#         attachment.add_header("Content-ID", "<logo_image>")
-#         return attachment
-
-# def load_already_registered():
-#     res = {}
-#     if path.exists("registered.json"):
-#         with open("registered.json", "r") as f:
-#             res = json.load(f)
-#     return res
-
-
 
 def format_to_auth0(email, name, password_hash):
     return {
@@ -45,6 +29,7 @@ def format_to_auth0(email, name, password_hash):
         "name": name,
         "password_hash": password_hash.decode('utf-8'),
     }
+
 
 def send_to_auth0(session, filename, access_token, connection_id):
     payload = {
@@ -61,23 +46,28 @@ def send_to_auth0(session, filename, access_token, connection_id):
         'authorization': f"Bearer {access_token}"
     }
 
-    domain = "https://" + urlsplit(session.auth0["audience"]).netloc + "/api/v2/jobs/users-imports"
+    domain = "https://" + \
+        urlsplit(session.auth0["audience"]).netloc + \
+        "/api/v2/jobs/users-imports"
     print(domain)
     response = requests.post(domain, data=payload, files=files,
                              headers=headers)
     print(response.content)
 
-def retrieve_users(auth : Authentication, access_token : str) -> List:
+
+def retrieve_users(auth: Authentication, access_token: str) -> List:
     users = []
     db = auth.auth0["connection"]
     cur_page = 0
-    
+
     headers = {
         'Authorization': f"Bearer {access_token}"
     }
 
-    while True:        
-        url = "https://" + auth.auth0["domain"] + f"/api/v2/users?page={cur_page}&per_page=100&q=identities.connection%3A%22{db}%22&search_engine=v3"
+    while True:
+        url = "https://" + \
+            auth.auth0["domain"] + \
+            f"/api/v2/users?page={cur_page}&per_page=100&q=identities.connection%3A%22{db}%22&search_engine=v3"
         print(url)
         response = requests.get(url, headers=headers).json()
         if not response or len(response) == 0:
@@ -87,55 +77,37 @@ def retrieve_users(auth : Authentication, access_token : str) -> List:
     return users
 
 
-def send_create_user(auth : Authentication, access_token : str, name : str, email : str, password : str, metadata : dict) -> requests.Response:
+def send_create_user(auth: Authentication, access_token: str, name: str, email: str, password: str, metadata: dict) -> requests.Response:
     """create user in specified database
     """
     payload = {
         "email": email,
-        "name" : name,
-        "verify_email" : False,
-        "password" : password,
-        "user_metadata" : metadata if metadata else {},
+        "name": name,
+        "verify_email": False,
+        "password": password,
+        "user_metadata": metadata if metadata else {},
         "connection": auth.auth0["connection"]
     }
-    
+
     headers = {
         'Authorization': f"Bearer {access_token}"
     }
 
-    
     url = "https://" + auth.auth0["domain"] + "/api/v2/users"
     print(url)
     response = requests.post(url, json=payload, headers=headers)
     print(response.content)
     return response
 
-def create_user(auth: Authentication, access_token : str, email : str, name : str):
-    """test function to create a user on the specified auth0 database
+
+def create_user(auth: Authentication, access_token: str, email: str, name: str, metadata: dict):
+    """function to create a user on the specified auth0 database
     """
     password = generate_password(email, auth.auth0["password_secret"])
     print(f"Email: {email}")
     print(f"Password: {password}")
-    
-    send_create_user(auth, access_token, name, email, password, None)
 
-def test_auth0(auth: Authentication):
-    all_new = []
-    email = "oc_guest@datav.is"
-    name = "OC Guest"
-    password_hash = generate_password_hash()
-    print("Password:")
-    print(password_hash.decode('utf-8'))
-
-    all_new.append(format_to_auth0(email, name, password_hash))
-
-    file_name = f"new_imports_{time.time_ns() / 1000}.json"
-    with open(file_name, "w") as f:
-        json.dump(all_new, f)
-    
-    print("Sending to Auth0")
-    token = auth.get_auth0_token()
-    send_to_auth0(auth, file_name, token, auth.auth0["connection_id"])
+    send_create_user(auth, access_token, name, email, password, metadata)
 
 def get_any_password_requests():
     password_requests = []
@@ -149,6 +121,7 @@ def get_any_password_requests():
     print(f"Got password requests {password_requests}")
     return password_requests
 
+
 def get_new_eventbrite(session):
     eventbrite_event_id = session.eventbrite_event_id
 
@@ -159,7 +132,7 @@ def get_new_eventbrite(session):
 
     # Note: Eventbrite's python SDK is half written essentially, and
     # doesn't directly support paging properly. So to load the other
-    # pages we need to use the raw get call ourselves instead of 
+    # pages we need to use the raw get call ourselves instead of
     # being able to continue calling get_event_attendees
     # It looks like we can also directly request a page by passing page: <number>
 
@@ -183,18 +156,12 @@ def get_new_eventbrite(session):
 
     return eventbrite_registrations
 
-def generate_password(email : str, secret : str) -> str:
+
+def generate_password(email: str, secret: str) -> str:
     """generates password from email using hash with secret
     """
     return hashlib.sha256((email + secret).encode('utf-8')).hexdigest()[:10]
 
-def generate_password_hash() -> bytes:    
-    """hash password with bcrypt to transmit password to auth0 without sharing the actual password
-    """
-    password = ''.join(secrets.choice(alphabet) for i in range(10))
-    salt = bcrypt.gensalt(rounds=10)
-    password_hash = bcrypt.hashpw(password, salt)
-    return password_hash
 
 def get_all(transmit_to_auth0, session, logo_attachment, max_new=-1):
     results = get_new_eventbrite(session)
@@ -222,14 +189,16 @@ def get_all(transmit_to_auth0, session, logo_attachment, max_new=-1):
             # random password
             password = ""
             if email not in all_registered:
-                password = ''.join(secrets.choice(alphabet) for i in range(10)).encode("utf-8")
+                password = ''.join(secrets.choice(alphabet)
+                                   for i in range(10)).encode("utf-8")
             else:
                 password = all_registered[email]["password"].encode("utf-8")
 
             salt = bcrypt.gensalt(rounds=10)
             password_hash = bcrypt.hashpw(password, salt)
 
-            all_new.append(format_to_auth0(email, name, password, password_hash))
+            all_new.append(format_to_auth0(
+                email, name, password, password_hash))
             all_registered[email] = {"name": name,
                                      "email": email,
                                      "password": password.decode('utf-8'),
@@ -244,9 +213,10 @@ def get_all(transmit_to_auth0, session, logo_attachment, max_new=-1):
         if session.email:
             time.sleep(0.1)
 
-        try: 
+        try:
             if session.email:
-                send_register_email(email, session, logo_attachment, name, password)
+                send_register_email(
+                    email, session, logo_attachment, name, password)
                 all_registered[email]["emailed"] = True
         except Exception as e:
             print("Error sending email {}".format(e))
@@ -274,33 +244,36 @@ def get_all(transmit_to_auth0, session, logo_attachment, max_new=-1):
         if transmit_to_auth0:
             print("Sending to Auth0")
             token = session.get_auth0_token()
-            send_to_auth0(session, file_name, token, session.auth0["connection_id"])
+            send_to_auth0(session, file_name, token,
+                          session.auth0["connection_id"])
             with open("registered.json", "w") as f:
                 json.dump(all_registered, f, indent=4)
     print(f"New registrations processed at {datetime.now()}")
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Sync Eventbrite with auth0.')
-    parser.add_argument('--test', action="store_true", help='do not start syncing, just retrieve all attendees')
-    parser.add_argument('--create_user', action="store_true", help='create user for testing purposes')
-    parser.add_argument('--get_users', action="store_true", help='retrieve all users and store them as a json file')
+    parser.add_argument('--create_user', action="store_true",
+                        help='create user for testing purposes')
+    parser.add_argument('--get_users', action="store_true",
+                        help='retrieve all users and store them as a json file')
     # parser.add_argument('--mail', action="store_true", help='send email for new users')
     # parser.add_argument('--auth0', action="store_true", help='send new users to auh0')
     # parser.add_argument('--limit', default=-1, type=int, help='maximum number of new users for this run')
-    parser.add_argument("--name", default=None, type=str, help='Name of user to create')
-    parser.add_argument("--email", default=None, type=str, help='Email of user')
+    parser.add_argument("--name", default=None, type=str,
+                        help='Name of user to create')
+    parser.add_argument("--email", default=None,
+                        type=str, help='Email of user')
     parser.add_argument("--token", default=None, type=str, help='access token')
-    parser.add_argument("--output", default=None, type=str, help='name of output file')
+    parser.add_argument("--output", default=None, type=str,
+                        help='name of output file')
 
     args = parser.parse_args()
 
-    if args.test:
-        auth = Authentication(auth0_api=True)
-        test_auth0(auth)
-    elif args.create_user:
+    if args.create_user:
         auth = Authentication(auth0_api=True)
         token = args.token if args.token else auth.get_auth0_token()
-        create_user(auth, token, args.email, args.name)
+        create_user(auth, token, args.email, args.name, {})
     elif args.get_users:
         if not args.output or len(args.output) == 0:
             print("output file name has to be specified.")
@@ -310,10 +283,10 @@ if __name__ == '__main__':
         users = retrieve_users(auth, token)
         print(f"{len(users)} users retrieved.")
         users_json = json.dumps(users, indent=4)
-        
+
         with open(args.output, "w", newline='', encoding='utf-8') as f:
             f.write(users_json)
-            
+
     # else:
     #     session = auth.Authentication(email=args.mail, eventbrite_api=True, auth0_api=True)
 
@@ -325,5 +298,3 @@ if __name__ == '__main__':
     #         print("Checking for new registrations")
     #         get_all(args.auth0, session, logo_attachment, args.limit)
     #         time.sleep(15 * 60)
-
-
