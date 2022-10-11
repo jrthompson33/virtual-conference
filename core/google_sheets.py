@@ -3,7 +3,7 @@ import os
 import time
 import uuid
 import argparse
-from typing import List
+from typing import Any, List
 from datetime import timezone, datetime, timedelta
 import csv
 import urllib.request
@@ -17,7 +17,7 @@ class GoogleSheets:
         """
         self.auth = conf_auth.Authentication()
         self._link = self.auth.gsheets['db_link']
-        self.data = []
+        self.data : List[dict[str, Any]] = []
         self.data_by_index : dict = {}
         self.sheet_name = ""
         if not self._link or not self._link.startswith("http"):
