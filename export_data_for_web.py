@@ -13,6 +13,7 @@ from core.google_sheets import GoogleSheets
 # OKC is in GMT-5, Central Daylight Time
 conf_tz = timezone(-timedelta(hours=5))
 
+
 def parse_time(t: str):
     return datetime.fromisoformat(t.replace("Z", "+00:00"))
 
@@ -28,10 +29,10 @@ def format_time(t: datetime):
 def format_time_iso8601_utc(t: datetime):
     return t.strftime("%Y-%m-%dT%H:%M:%SZ")
 
+
 def format_time_local(t: datetime):
     localt = t.replace(tzinfo=timezone.utc).astimezone(tz=conf_tz)
     return localt.strftime("%a %b %d %H:%M CDT")
-
 
 
 def make_description_for_session(session_title: str, session_id: str, session_room: str, start_time: datetime, end_time: datetime):
@@ -44,7 +45,7 @@ def make_description_for_session(session_title: str, session_id: str, session_ro
 
     text += f"Session Room: {session_room} \n\n"
 
-    # NOTE: include local time here as well 
+    # NOTE: include local time here as well
     text += f"Session Start: {format_time_local(start_time)} ({format_time(start_time)}) \n" + \
             f"Session End: {format_time_local(end_time)} ({format_time(end_time)})"
 
@@ -219,7 +220,10 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
         filtered_papers = list(
             filter(lambda p: p["Session ID"] == s_data["session_id"], sheet_papers.data))
 
-        for p in filtered_papers:
+        filtered_ext = list(
+            filter(lambda e: e["Session ID"] == s_data["session_id"], sheet_ext.data))
+
+        for p in filtered_papers + filtered_ext:
             # Find the corresponding entry by Paper UID in PapersDB
 
             p_db = db_papers_dict[p["Paper UID"]
@@ -291,12 +295,12 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             "title": p["Title"],
             "uid": p["UID"],
             "discord_channel": "",
-            "has_image": False,
             "authors": [a.strip() for a in p["Authors"].split("|")] if p["Authors"] else [],
             "author_affiliations": [a.strip() for a in p["ACM Author Affiliations"].split(";")] if p["ACM Author Affiliations"] else [],
             "presenting_author": p["Presenting Author (name)"],
             "abstract": p["Abstract"],
-            "has_summary_pdf": p["PDF Link"] != "",
+            "has_summary_pdf": p["Has Summary PDF"],
+            "has_image": p["Has Image"],
             "pdf_link": p["PDF Link"],
         }
         if p_data["uid"]:
