@@ -138,5 +138,21 @@
     "subject": "Welcome to VIS 2022",
     "body_text": "Dear {name},\r\nWe are excited to welcome you to this year's IEEE VIS conference in Oklahoma City. You can login to the virtual site with the following credentials:\r\nUser: {email}\r\nPassword: {password}\r\n\r\nPlease also join our Discord server: {discord_invite_url}\r\n\r\nBest regards,\nIEEE VIS 2022 Tech Chairs\nAlex Bock, Johannes Knittel, John Thompson, John Wenskovitch\n",
     "body_html": ""
+  },
+  "session_chair_info_test": {
+    "sender": "IEEE VIS Tech Chairs <tech@ieeevis.org>",
+    "recipient": "",
+    "recipient_attributes": [ "Session Chairs Emails", "Organizer Emails" ],
+    "subject": "Hosting your Session {Session Title} at VIS 2022",
+    "body_text": "Dear Session Chair, Host, or Organizer,\r\nwe write you regarding the hosting of the session '{Session Title}' for the event '{Event}' at VIS 2022.",
+    "body_html": ""
+  },
+  "speakers_info_test": {
+    "sender": "IEEE VIS Tech Chairs <tech@ieeevis.org>",
+    "recipient": "",
+    "recipient_attribute": "Slot Contributors Emails",
+    "subject": "Presenting at {Session Title} during VIS 2022",
+    "body_text": "Dear Speaker,\r\nwe write you regarding your upcoming talk or q+a at as part of the session '{Session Title}' for the event '{Event}' at VIS 2022.",
+    "body_html": ""
   }
 }
