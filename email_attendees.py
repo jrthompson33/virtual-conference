@@ -30,6 +30,7 @@ def check_and_send_infos_to_users(auth: Authentication, auth0_token : str, templ
         i += 1
         print(f"\r\nprocessing {i}/{len(users)}")
         send_info_to_user(auth, auth0_token, user, template)
+        time.sleep(2)
 
 def test_send_info_to_user(auth: Authentication, auth0_token : str, template : dict, email : str):
     """
