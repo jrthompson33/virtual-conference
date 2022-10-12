@@ -1,7 +1,7 @@
-import sys
-import shutil
+from calendar import Calendar
 import os
 import json
+from threading import local
 import ics
 from PIL import Image
 from datetime import timezone, datetime, timedelta
@@ -10,6 +10,8 @@ import argparse
 from core.auth import Authentication
 from core.google_sheets import GoogleSheets
 
+# OKC is in GMT-5, Central Daylight Time
+conf_tz = timezone(-timedelta(hours=5))
 
 def parse_time(t: str):
     return datetime.fromisoformat(t.replace("Z", "+00:00"))
@@ -26,6 +28,62 @@ def format_time(t: datetime):
 def format_time_iso8601_utc(t: datetime):
     return t.strftime("%Y-%m-%dT%H:%M:%SZ")
 
+def format_time_local(t: datetime):
+    localt = t.replace(tzinfo=timezone.utc).astimezone(tz=conf_tz)
+    return localt.strftime("%a %b %d %H:%M CDT")
+
+
+
+def make_description_for_session(session_title: str, session_id: str, session_room: str, start_time: datetime, end_time: datetime):
+    text = session_title + " [VIS 2022] \n\n"
+    # if self.timeslot_entry(0, "Event URL").value:
+    #     text += "\nEvent Webpage: {}".format(self.timeslot_entry(0, "Event URL").value)
+
+    # NOTE: You'll want to replace this with the link to your conference session page
+    text += f"Session Webpage: https://virtual.ieeevis.org/year/2022/session_{session_id}.html \n"
+
+    text += f"Session Room: {session_room} \n\n"
+
+    # NOTE: include local time here as well 
+    text += f"Session Start: {format_time_local(start_time)} ({format_time(start_time)}) \n" + \
+            f"Session End: {format_time_local(end_time)} ({format_time(end_time)})"
+
+    # if self.timeslot_entry(0, "Discord Link").value:
+    #     text += "\nDiscord Link: " + self.timeslot_entry(0, "Discord Link").value
+
+    # if self.timeslot_entry(0, "Chair(s)").value:
+    #     text += "\nSession Chair(s): " + self.timeslot_entry(0, "Chair(s)").value.replace("|", ", ")
+
+    return text
+
+
+def make_calendar_for_session(session_title: str, session_id: str, session_room: str, start_time: datetime, end_time: datetime) -> ics.Calendar:
+    print(session_id)
+    print(start_time)
+    print(end_time)
+    calendar = ics.Calendar()
+    event = ics.Event()
+    event.begin = start_time
+    # Use this for sending events to SVs, Chairs, etc.
+    # if with_setup_time:
+    #     event.begin -= self.setup_time()
+    event.end = end_time
+    event.name = session_title + " [VIS 2022]"
+    event.location = session_room
+
+    event.description = ""
+    # We include the zoom info in the calendar file sent to presenters,
+    # put the URL up front in ICS because google calendar limits the length of this
+    # if zoom_info:
+    #     event.description += "Zoom URL: " + self.timeslot_entry(0, "Zoom URL").value + \
+    #             "\nZoom Meeting ID: " + self.timeslot_entry(0, "Zoom Meeting ID").value + \
+    #             "\nZoom Password: " + self.timeslot_entry(0, "Zoom Password").value + "\n"
+
+    event.description += make_description_for_session(
+        session_title, session_id, session_room, start_time, end_time)
+    calendar.events.add(event)
+    return calendar
+
 
 def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool, export_img: bool, export_pdf: bool):
     """create data for virtual website.
@@ -38,6 +96,8 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 
+    if export_ics and not os.path.exists(os.path.join(output_dir, "ics")):
+        os.makedirs(os.path.join(output_dir, "ics"), exist_ok=True)
     full_calendar = ics.Calendar()
     event_calendars = {}
 
@@ -53,6 +113,9 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
 
     sheet_papers = GoogleSheets()
     sheet_papers.load_sheet("ItemsVISPapers-A")
+
+    sheet_ext = GoogleSheets()
+    sheet_ext.load_sheet("ItemsEXT")
 
     sheet_posters = GoogleSheets()
     sheet_posters.load_sheet("Posters")
@@ -137,6 +200,20 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             "ff_playlist": s["Session FF Playlist URL"],
             "time_slots": [],
         }
+
+        if export_ics:
+            calendar = make_calendar_for_session(s["Session Title"], s["Session ID"], t["Room Name"] if t else "", parse_time(
+                s["DateTime Start"]), parse_time(s["DateTime End"]))
+
+            full_calendar.events |= calendar.events
+
+            if s["Event Prefix"] not in event_calendars:
+                event_calendars[s["Event Prefix"]] = ics.Calendar()
+            event_calendars[s["Event Prefix"]].events |= calendar.events
+
+            # Create the session ics file
+            with open(os.path.join(output_dir, "ics", s["Session ID"] + ".ics"), "w", encoding="utf8") as f:
+                f.write(calendar.serialize())
 
         # TODO This only includes papers that are in a session, will need to look for non-overlapping cases
         filtered_papers = list(
@@ -224,6 +301,14 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
         }
         if p_data["uid"]:
             all_posters[p_data["uid"]] = p_data
+
+    if export_ics:
+        with open(os.path.join(output_dir, "ics", "VIS2022.ics"), "w", encoding="utf8") as f:
+            f.write(full_calendar.serialize())
+
+        for k, v in event_calendars.items():
+            with open(os.path.join(output_dir, "ics", k + ".ics"), "w", encoding="utf8") as f:
+                f.write(v.serialize())
 
     with open(os.path.join(output_dir, "session_list.json"), "w", encoding="utf8") as f:
         json.dump(all_events, f, indent=4)
