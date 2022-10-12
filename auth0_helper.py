@@ -56,7 +56,7 @@ def send_to_auth0(session, filename, access_token, connection_id):
                              headers=headers)
     print(response.content)
 
-def retrieve_users_via_export(auth: Authentication, access_token: str) -> List:
+def retrieve_users_via_export(auth: Authentication, access_token: str) -> List[dict]:
     """Retrieve up to 10,000 auth0 users using the export job functionality
     """
     users = []
@@ -140,6 +140,22 @@ def retrieve_users(auth: Authentication, access_token: str) -> List:
         cur_page += 1
     return users
 
+def user_update_merge_metadata(auth: Authentication, access_token: str, user_id : str, metadata : dict) -> requests.Response:
+    """update the user metadata of the specified user, but be aware that auth0 performs a first-level merge, i.e. existing fields not part of new metadata still remain
+    """
+    payload = {
+        "user_metadata": metadata if metadata else {}
+    }
+
+    headers = {
+        'Authorization': f"Bearer {access_token}"
+    }
+
+    url = "https://" + auth.auth0["domain"] + "/api/v2/users/" + user_id
+    print(url)
+    response = requests.patch(url, json=payload, headers=headers)
+    print(response.content)
+    return response
 
 def send_create_user(auth: Authentication, access_token: str, name: str, email: str, password: str, metadata: dict) -> requests.Response:
     """create user in specified database

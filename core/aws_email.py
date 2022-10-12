@@ -1,8 +1,7 @@
 """script that provides functions for sending mails with Amazon's Simple Email Service
 """
 
-from functools import cached_property
-import boto3
+
 from typing import List, Tuple
 from core.auth import Authentication
 from email import encoders
@@ -33,6 +32,8 @@ def send_aws_email(session : Authentication, sender: str, recipients: List[str],
         </html>'
     """
     client = session.email
+    if type(body_html) == str and len(body_html.strip()) == 0:
+        body_html = None
     response = client.send_email(
         Destination={
             'ToAddresses': recipients
@@ -47,7 +48,12 @@ def send_aws_email(session : Authentication, sender: str, recipients: List[str],
                     'Charset': charset,
                     'Data': body_text,
                 },
-            } if body_html else None,
+            } if body_html else {
+                'Text': {
+                    'Charset': charset,
+                    'Data': body_text,
+                },
+            },
             'Subject': {
                 'Charset': charset,
                 'Data': subject,
