@@ -60,50 +60,90 @@ def send_aws_email(session : Authentication, sender: str, recipients: List[str],
     )
     return response
 
-def _get_recipients_from_template(paper : dict, template : dict) -> Tuple[list,list]:
+def _get_recipients_from_template(row : dict, template : dict) -> Tuple[list,list]:
     """extract recipient(s) from a single database item and the corresponding template:
 
     recipients, cc_recipients = _get_recipients_from_template(paper, template)
     """
-    attribute = template["recipient_attribute"]
+    recipients = []
+    attribute_arr : List = template["recipient_attributes"] if "recipient_attributes" in template else None
+    if not attribute_arr or len(attribute_arr) == 0:
+        attribute_arr = []
+
+    attribute = template["recipient_attribute"] if "recipient_attribute" in template else None
     if attribute and len(attribute) > 0:
-        r_str = paper[attribute]
-        if type(r_str) != str or len(r_str) == 0:
-            return [], [] #empty field
-        recipients = r_str.split("|")
-    else:
-        r_str = template["recipient"]
-        if type(r_str) != str or len(r_str) == 0:
-            return [], [] #empty field
-        recipients = [ r_str.format(**paper) ]   
+        attribute_arr.append(attribute)
+    
+    for att in attribute_arr:
+        if type(att) != str or len(att.strip()) == 0:
+            continue
+        r_str = row[att] if att in row else None
+        if type(r_str) != str:
+            continue
+        for email in r_str.split("|"):
+            em = email.strip()
+            if len(em) == 0:
+                continue
+            recipients.append(em)
+    rec_template = template["recipient"] if "recipient" in template else None
+    if type(rec_template) == str and len(rec_template) > 0:
+        email = rec_template.format(**row).strip()
+        recipients.append(email)
     return recipients, []
 
-
-def send_aws_email_paper(session : Authentication, paper : dict, template : dict):
-    """send mails to specified recipients of a paper using text body and/or html body.
+def send_aws_email_rows(session : Authentication, rows : List[dict], template : dict):
+    """send mails to specified recipients of database rows using text body and/or html body.
+    All dictionaries (rows) specified will be merged into one dictionary that serves as a joined input row.
     Recipients, sender, and mail content will be determined based on specified template dictionary.
-    This template dict can use placeholders based on the paper's attributes.
+    This template dict can use placeholders based on the attributes of the joined input row.
 
     session: Authentication instance in which aws ses client was authenticated
-    paper : db item of PapersDatabase (dict)
-    template : template dict to use for generating mails, e.g.:
+    rows : array of dictionaries/rows
+    template : template dict to use for generating mails,
+        at least one of the recipient* fields have to be set, e.g.:
       {
         "sender": "IEEE VIS <no-reply@ieeevis.org>",
-        "recipient": "",
+        "recipient": "tech{UID}@mail.com",
         "recipient_attribute": "Contributor Email(s)",
+        "recipient_attributes": ["Contributor Email(s)", "Session Chair Emails" ],
         "subject": "Some Test Mail for Paper {UID}",
         "body_text": "We regret to inform you that your request for paper {Title} has not been granted",
         "body_html": "<html><head></head><body><h1>Hello</h1><p>We regret to inform you that your request for paper {Title} has not been granted</p></body></html>"
       } 
     """
-    recipients, cc_recipients = _get_recipients_from_template(paper, template)
+    row : dict = {}
+    for d in rows:
+        row.update(d)
+    return send_aws_email_paper(session, row, template)
+
+def send_aws_email_paper(session : Authentication, row : dict, template : dict):
+    """send mails to specified recipients of a paper or database row using text body and/or html body.
+    Recipients, sender, and mail content will be determined based on specified template dictionary.
+    This template dict can use placeholders based on the paper's attributes.
+
+    session: Authentication instance in which aws ses client was authenticated
+    row : db item of PapersDatabase or any other row (dict)
+    template : template dict to use for generating mails,
+        at least one of the recipient* fields have to be set, e.g.:
+      {
+        "sender": "IEEE VIS <no-reply@ieeevis.org>",
+        "recipient": "tech{UID}@mail.com",
+        "recipient_attribute": "Contributor Email(s)",
+        "recipient_attributes": ["Contributor Email(s)", "Session Chair Emails" ],
+        "subject": "Some Test Mail for Paper {UID}",
+        "body_text": "We regret to inform you that your request for paper {Title} has not been granted",
+        "body_html": "<html><head></head><body><h1>Hello</h1><p>We regret to inform you that your request for paper {Title} has not been granted</p></body></html>"
+      } 
+    """
+    recipients, cc_recipients = _get_recipients_from_template(row, template)
     if len(recipients) == 0 and len(cc_recipients) == 0:
-        print(f"skipping paper '{paper['UID']}' with zero recipients")
+        item_id = row['UID'] if 'UID' in row else ''
+        print(f"skipping row {item_id} with zero recipients")
         return
-    sender = template["sender"].format(**paper)
-    subject = template["subject"].format(**paper)
-    body_text = template["body_text"].format(**paper)
-    body_html = template["body_html"].format(**paper)
+    sender = template["sender"].format(**row)
+    subject = template["subject"].format(**row)
+    body_text = template["body_text"].format(**row)
+    body_html = template["body_html"].format(**row)
     return send_aws_email(session, sender, recipients, subject, body_text, body_html)
 
 def send_aws_mime_email(session : Authentication, sender: str, recipients: List[str],
