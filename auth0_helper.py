@@ -1,5 +1,6 @@
 import argparse
 import sys
+from telnetlib import DO
 import time
 import os
 import json
@@ -11,6 +12,7 @@ import time
 import http.client
 import requests
 import hashlib
+from gzip import decompress
 
 from urllib.parse import urlsplit
 from datetime import datetime
@@ -53,6 +55,68 @@ def send_to_auth0(session, filename, access_token, connection_id):
     response = requests.post(domain, data=payload, files=files,
                              headers=headers)
     print(response.content)
+
+def retrieve_users_via_export(auth: Authentication, access_token: str) -> List:
+    """Retrieve up to 10,000 auth0 users using the export job functionality
+    """
+    users = []
+    connection = auth.auth0["connection_id"]
+    headers = {
+        'Authorization': f"Bearer {access_token}"
+    }
+    export_req_body = """{
+                  "connection_id": "{conn}",
+                  "format": "json",
+                  "limit": 10000,
+                  "fields": [
+                    {
+                      "name": "user_id"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "email"
+                    },
+                    {
+                      "name": "identities[0].connection",
+                      "export_as": "provider"
+                    },
+                    {
+                      "name": "user_metadata"
+                    }
+                  ]
+                }
+                """.replace("{conn}", connection)
+    url = "https://" + auth.auth0["domain"] + f"/api/v2/jobs/users-exports"
+    print(url)
+    exp_response = requests.post(url, data=export_req_body, headers={
+        **headers, 
+        "Content-Type": "application/json"}).json()
+    job_id = exp_response["id"]
+    while True:
+        time.sleep(2)
+        url = "https://" + auth.auth0["domain"] + f"/api/v2/jobs/{job_id}"
+        print(url)
+        job_res = requests.get(url, headers=headers).json()
+        status = job_res["status"] if "status" in job_res else "<missing>"
+        if status == "pending":
+            continue
+        if status != "completed":
+            raise Exception(f"unexpected status of job: {job_res.status}")
+        url = job_res["location"]
+        print(url)
+        if not url.startswith("http"):
+            raise Exception(f"unexpected location: {url}")
+        res_response = requests.get(url).content
+        json_lines = decompress(res_response).decode("utf-8").splitlines()
+        res = []
+        for l in json_lines:
+            if len(l.strip()) == 0:
+                continue
+            res.append(json.loads(l))
+        return res
+            
 
 
 def retrieve_users(auth: Authentication, access_token: str) -> List:
@@ -280,7 +344,7 @@ if __name__ == '__main__':
             exit(-1)
         auth = Authentication(auth0_api=True)
         token = args.token if args.token else auth.get_auth0_token()
-        users = retrieve_users(auth, token)
+        users = retrieve_users_via_export(auth, token)
         print(f"{len(users)} users retrieved.")
         users_json = json.dumps(users, indent=4)
 
