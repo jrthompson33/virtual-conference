@@ -194,9 +194,9 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             "slido_link": t["Slido URL"] if t else "",
             "youtube_url": b["YouTube URL"] if b else "https://youtu.be/_evorVC17Yg",
             "youtube_id": b["Video ID"] if b else "_evorVC17Yg",
-            "zoom_meeting": s["Zoom Meeting ID"],
-            "zoom_password": s["Zoom Password"],
-            "zoom_link": s["Zoom URL"],
+            "zoom_meeting": "",
+            "zoom_password": "",
+            "zoom_link": "",
             "ff_link": s["Session FF URL"],
             "ff_playlist": s["Session FF Playlist URL"],
             "time_slots": [],
@@ -244,6 +244,8 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
                 paper_type = "associated"
             elif p_event_prefix.startswith("w-"):
                 paper_type = "workshop"
+            elif p_event_prefix.startswith("t-"):
+                paper_type = "tutorial"
 
             p_data = {
                 "slot_id": p["Item ID"],
@@ -275,7 +277,7 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
 
             # All papers will have a UID
             # Should this be filtered for only full, short, cga, tvcg?
-            if p_data["uid"] and not "Q+A" in p_data["type"] and not "Q + A" in p_data["type"]:
+            if p_data and p_data["uid"] and not "Q+A" in p_data["type"] and not "Q + A" in p_data["type"]:
                 all_papers[p_data["uid"]] = p_data
 
         if s_data["event_prefix"] in all_events:
