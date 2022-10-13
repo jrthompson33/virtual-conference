@@ -83,7 +83,8 @@ def schedule_meetings(args : argparse.Namespace):
     tracks_dict : dict[dict[str, Any], Any] = {}
     for row in tracks.data:
         tracks_dict[row["Track"]] = row
-    sessions = list(filter(lambda row: row["Zoom Meeting ID"] is None or len(row["Zoom Meeting ID"].strip()) == 0, sessionsSheet.data))
+    sessions = list(filter(lambda row: row["Track"] and len(row["Track"].strip()) > 0 and row["Track"].strip() != "various" and \
+       (row["Zoom Meeting ID"] is None or len(row["Zoom Meeting ID"].strip()) == 0), sessionsSheet.data))
     if args.event_prefix and len(args.event_prefix) > 0:
         sessions = list(filter(lambda it: it["Event Prefix"] == args.event_prefix, sessions))
     if args.track and len(args.track) > 0:
