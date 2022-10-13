@@ -7,10 +7,13 @@ import argparse
 import time
 
 
-def send_emails(auth: Authentication, template : dict, without_slot_contributors : bool = True, event_prefix : str = None, session_id : str = None):
+def send_emails(auth: Authentication, template : dict, without_slot_contributors : bool = True, event_prefix : str = None, session_id : str = None, ignore_various : bool = True):
     """send emails to session targets, recipients have to be specified in template as well
     """
     rows = join_session_contributor_rows() if without_slot_contributors else join_slot_contributors()
+    
+    if ignore_various:
+        rows = list(filter(lambda r: r["Track"] != "various", rows))
     if event_prefix and len(event_prefix) > 0:
         rows = list(filter(lambda r: r["Event Prefix"] == event_prefix, rows))
     if session_id and len(session_id) > 0:
@@ -20,7 +23,8 @@ def send_emails(auth: Authentication, template : dict, without_slot_contributors
     for row in rows:
         i += 1
         sid = row["Session ID"]
-        print(f"\r\nrow {i}/{len(rows)} Session {sid}")
+        track = row["Track"]
+        print(f"\r\nrow {i}/{len(rows)} Session {sid} - Track {track}")
         response = send_aws_email_paper(auth, row, template)
         print(f"    {response}")
         if i % 4 == 3:
@@ -113,6 +117,9 @@ if __name__ == '__main__':
     parser.add_argument('--speakers', help='send email to session targets such slot contributors, hosts/chairs, event organizers',
                         action='store_true', default=False)
     
+    parser.add_argument('--ignore_various', help='do not send emails to events in various track (default)',
+                        action='store_true', default=True)
+
     parser.add_argument(
         '--email_template', help='template to use for the email', default=None)
 
@@ -132,6 +139,6 @@ if __name__ == '__main__':
     template : dict = templates[template_key]
 
     if args.session:
-        send_emails(auth, template, True, args.event_prefix, args.session_id)
+        send_emails(auth, template, True, args.event_prefix, args.session_id, args.ignore_various)
     elif args.speakers:        
-        send_emails(auth, template, False, args.event_prefix, args.session_id)
+        send_emails(auth, template, False, args.event_prefix, args.session_id, args.ignore_various)
