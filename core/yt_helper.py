@@ -220,6 +220,36 @@ class YouTubeHelper:
         ).execute()
         return resp
 
+    def disable_autostart(self, broadcast_id : str):
+        """Make sure that auto start streaming is disabled
+        """
+        resp = self.auth.youtube.liveBroadcasts().update(
+            part="id,contentDetails",
+            body={
+                "id": broadcast_id,
+                "contentDetails": {
+                    "closedCaptionsType": "closedCaptionsHttpPost",
+                    "enableContentEncryption": False,
+                    "enableDvr": True,
+                    # Note: YouTube requires you to have 1k subscribers and 4k public watch hours
+                    # to enable embedding live streams. You can set this to true if your account
+                    # meets this requirement and you've enabled embedding live streams
+                    "enableEmbed": True,
+                    "enableAutoStart": False,
+                    "enableAutoEnd": False,
+                    "recordFromStart": True,
+                    "startWithSlate": False,
+                    # We must use a low latency only stream if using live captions
+                    "latencyPreference": "low",
+                    "monitorStream": {
+                        "enableMonitorStream": False,
+                        "broadcastStreamDelayMs": 0
+                    }
+                }
+            }
+        ).execute()
+        return resp
+
     def upload_subtitles(self, video_id : str, subtitles_path : str, name : str = "English Subtitles",
                         language : str = "en-us"):
         """Upload subtitles file to specified video

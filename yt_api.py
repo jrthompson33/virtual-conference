@@ -11,6 +11,78 @@ from datetime import datetime
 from core.yt_helper import YouTubeHelper
 from core.google_sheets import GoogleSheets
 
+
+def disable_autostart_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
+    """disable autostart of broadcasts from sheet, possibly filtered by dow = Day of Week
+    """
+    broadcasts = GoogleSheets()
+    broadcasts.load_sheet("Broadcasts")
+    data = broadcasts.data
+    print(f"{len(data)} broadcasts loaded")
+    data = list(filter(lambda d: d["Video ID"] and len(d["Video ID"].strip()) > 0, data))
+    if args.dow:
+        data = list(filter(lambda d: d["Day of Week"] == args.dow, data))
+    
+    num_to_schedule = len(data)
+    print(f"{num_to_schedule} broadcasts will be updated")
+    for broadcast in data:
+        v_id :str = broadcast["Video ID"]
+        title : str = broadcast["Title"]
+        print(f"disabling autostart for {v_id} - {title}")
+        res = yt.disable_autostart(v_id)
+        print(json.dumps(res))
+
+
+def unbind_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
+    """disable autostart of broadcasts from sheet, possibly filtered by dow = Day of Week
+    """
+    broadcasts = GoogleSheets()
+    broadcasts.load_sheet("Broadcasts")
+    data = broadcasts.data
+    print(f"{len(data)} broadcasts loaded")
+    data = list(filter(lambda d: d["Video ID"] and len(d["Video ID"].strip()) > 0 and d["Stream Bound"] == "y", data))
+    if args.dow:
+        data = list(filter(lambda d: d["Day of Week"] == args.dow, data))
+    
+    num_to_schedule = len(data)
+    print(f"{num_to_schedule} broadcasts will be unbound")
+    for broadcast in data:
+        v_id :str = broadcast["Video ID"]
+        title : str = broadcast["Title"]
+        print(f"unbinding for {v_id} - {title}")
+        res = yt.bind_stream_to_broadcast(None, v_id)
+        print(json.dumps(res))
+        broadcast["Stream Bound"] = ""
+        broadcasts.save()
+
+
+
+def bind_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
+    """bind broadcasts in sheet, possibly filtered by dow = Day of Week
+    """
+    broadcasts = GoogleSheets()
+    broadcasts.load_sheet("Broadcasts")
+    data = broadcasts.data
+    print(f"{len(data)} broadcasts loaded")
+    data = list(filter(lambda d: d["Video ID"] and len(d["Video ID"].strip()) > 0 and d["Stream Bound"] != "y", data))
+    if not args.dow or len(args.dow.strip()) == 0:
+        print("--dow needs to be specified")
+        return
+    data = list(filter(lambda d: d["Day of Week"] == args.dow, data))
+    
+    num_to_schedule = len(data)
+    print(f"{num_to_schedule} broadcasts will be bind")
+    for broadcast in data:
+        l_id :str = broadcast["Livestream ID"]
+        title : str = broadcast["Title"]
+        stream_key_id = broadcast["Stream Key ID"]
+        broadcast_id = broadcast["Video ID"]
+        print(f"\r\nbind stream {stream_key_id} to broadcast {l_id} with id {broadcast_id} - {title}...")
+        res = yt.bind_stream_to_broadcast(stream_key_id, broadcast_id)
+        print(json.dumps(res))
+        broadcast["Stream Bound"] = "y"
+        broadcasts.save()
+
 def schedule_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
     """schedule broadcasts from sheet, possibly filtered by dow = Day of Week
     """
@@ -18,7 +90,7 @@ def schedule_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
     broadcasts.load_sheet("Broadcasts")
     data = broadcasts.data
     print(f"{len(data)} broadcasts loaded")
-    data = list(filter(lambda d: d["Video ID"] == None or len(d["Video ID"].strip()) == 0 or d["Stream Bound"] != "y", data))
+    data = list(filter(lambda d: d["Video ID"] == None or len(d["Video ID"].strip()) == 0, data))
     if args.dow:
         data = list(filter(lambda d: d["Day of Week"] == args.dow, data))
     
@@ -42,8 +114,10 @@ def schedule_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
                 thumbnail_path = os.path.join(args.path, thumbnail_path)
             if os.path.isfile(thumbnail_path):
                 use_thumbnail = True
-
-        stream_key_id = broadcast["Stream Key ID"]
+            else:
+                print(f"MISSING thumbnail: {thumbnail_path}, aborting...")
+                return
+        
         captions_enabled = broadcast["Captions Enabled"] == "y"
         start_dt = broadcast["Start DateTime"]
         print(f"\r\nschedule broadcast {l_id} - {title}...")
@@ -51,25 +125,17 @@ def schedule_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
             print(f"ERROR: invalid start date time provided, has to be in ISO format, UTC")
             continue
         dt = datetime.fromisoformat(start_dt.replace('Z', '+00:00'))
-
-        if broadcast["Video ID"] == None or len(broadcast["Video ID"].strip()) == 0:
-            res = yt.schedule_broadcast(title, description, dt, 
-                                        enable_captions=captions_enabled, 
-                                        thumbnail_path = thumbnail_path if use_thumbnail else None,
-                                        enable_auto_start=True)
-            print(json.dumps(res))
-            broadcast_id = res["id"]
-            broadcast["Video ID"] = broadcast_id
-            broadcast["YouTube URL"] = "https://youtu.be/" + broadcast_id
-            broadcasts.save()
-            num_scheduled += 1
-        else:
-            broadcast_id = broadcast["Video ID"]
-        print(f"\r\nbind stream {stream_key_id} to broadcast {l_id} with id {broadcast_id}...")
-        res = yt.bind_stream_to_broadcast(stream_key_id, broadcast_id)
+        
+        res = yt.schedule_broadcast(title, description, dt, 
+                                    enable_captions=captions_enabled, 
+                                    thumbnail_path = thumbnail_path if use_thumbnail else None,
+                                    enable_auto_start=False)
         print(json.dumps(res))
-        broadcast["Stream Bound"] = "y"
+        broadcast_id = res["id"]
+        broadcast["Video ID"] = broadcast_id
+        broadcast["YouTube URL"] = "https://youtu.be/" + broadcast_id
         broadcasts.save()
+        num_scheduled += 1
 
         if num_scheduled >= max_n_schedules:
             print("max num of schedules reached.")
@@ -697,6 +763,12 @@ if __name__ == '__main__':
                         action='store_true', default=False)
     parser.add_argument('--schedule_broadcasts', help='schedule and bind broadcasts from sheet',
                         action='store_true', default=False)
+    parser.add_argument('--disable_autostart', help='disable autostart of broadcasts in sheet',
+                        action='store_true', default=False)
+    parser.add_argument('--unbind_broadcasts', help='unbind broadcasts in sheet',
+                        action='store_true', default=False)
+    parser.add_argument('--bind_broadcasts', help='bind broadcasts in sheet for specific day of week',
+                        action='store_true', default=False)
     parser.add_argument('--bind', help='bind stream to broadcast',
                         action='store_true', default=False)
     parser.add_argument('--unbind', help='unbind stream from broadcast',
@@ -768,6 +840,8 @@ if __name__ == '__main__':
         print(json.dumps(res))
     elif args.schedule_broadcasts:
         schedule_broadcasts(yt, args)
+    elif args.disable_autostart:
+        disable_autostart_broadcasts(yt, args)
     elif args.upload_video:
         res = yt.upload_video(args.path, args.title, args.description)
         print(json.dumps(res))
@@ -789,6 +863,10 @@ if __name__ == '__main__':
     elif args.unbind:
         res = yt.bind_stream_to_broadcast(None, args.id)
         print(json.dumps(res))
+    elif args.unbind_broadcasts:
+        unbind_broadcasts(yt, args)
+    elif args.bind_broadcasts:
+        bind_broadcasts(yt, args)
     elif args.start_broadcast:
         res = yt.make_broadcast_live(args.id, args.stream_key)
         print(json.dumps(res))
