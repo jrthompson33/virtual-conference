@@ -269,7 +269,7 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
                 "paper_award": p_db["Award"] if p_db else "",
                 "image_caption": p_db["Image Caption"] if p_db else "",
                 "external_paper_link": "",
-                "has_pdf": False,
+                "has_pdf": p_db["Has PDF"] == "1" if p_db else False,
                 "ff_link": ""
             }
 
