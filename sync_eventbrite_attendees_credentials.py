@@ -1,4 +1,5 @@
 import argparse
+import time
 
 
 from eventbrite_helper import get_attendees
@@ -24,19 +25,38 @@ def sync_attendees(auth: Authentication):
     for ea in eventbrite_attendees:
         if ea['profile'] and ea['profile']['name'] and ea['profile']['email'] and not ea['cancelled']:
             # Check if ea is in auth0_users
-            au = next(
-                filter(lambda a: a['email'] == ea['profile']['email'], auth0_users), None)
+            au = next((a for a in auth0_users if a['email'].strip().lower() == ea['profile']['email'].strip().lower()), None)
             if au == None:
                 create_user(auth, auth.get_auth0_token(),
                             ea['profile']['email'], ea['profile']['name'], {'invite_email_sent': False})
 
 
+def monitor_sync_attendees(auth: Authentication):
+    """
+    """
+    print("monitoring started...")
+    while True:
+        try:
+            sync_attendees(auth)
+        except Exception as e:
+            print(f"\r\nERROR OCCURRED: {e}\r\n")
+        time.sleep(20*60)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='Sync attendees from EventBrite and CVENT with Auth0')
+        description='Sync attendees from EventBrite with Auth0')
+    parser.add_argument('--monitoring', help='monitor eventbrite users and send to auth0',
+                        action='store_true', default=False)
 
     auth = Authentication(auth0_api=True)
-    sync_attendees(auth)
+    args = parser.parse_args()
+
+    if args.monitoring:
+        monitor_sync_attendees(auth)
+    else:
+        sync_attendees(auth)
+
 
 # Things to do in this script
 
