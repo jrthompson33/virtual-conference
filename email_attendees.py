@@ -5,7 +5,8 @@ from auth0_helper import generate_password, user_update_merge_metadata, retrieve
 import argparse
 import time
 
-def send_info_to_user(auth: Authentication, auth0_token : str, user : dict, template : dict):
+
+def send_info_to_user(auth: Authentication, auth0_token: str, user: dict, template: dict, flag_invite_email_sent: bool):
     """
     """
     email = user["email"]
@@ -15,29 +16,47 @@ def send_info_to_user(auth: Authentication, auth0_token : str, user : dict, temp
     response = send_aws_email_paper(auth, user, template)
     print(f"    {response}")
     print(f"updating metadata...")
-    auth0_res = user_update_merge_metadata(auth, auth0_token, user["user_id"], { "invite_email_sent":True})
-    
-def check_and_send_infos_to_users(auth: Authentication, auth0_token : str, template : dict):
+    if flag_invite_email_sent:
+        auth0_res = user_update_merge_metadata(
+            auth, auth0_token, user["user_id"], {"invite_email_sent": True})
+
+
+def check_and_send_infos_to_users(auth: Authentication, auth0_token: str, template: dict):
     """
     """
     users = retrieve_users_via_export(auth, auth0_token)
     print(f"{len(users)} users retrieved")
-    users = list(filter(lambda u: "user_metadata" not in u or "invite_email_sent" not in u["user_metadata"] or not u["user_metadata"]["invite_email_sent"], users))
+    users = list(filter(lambda u: "user_metadata" not in u or "invite_email_sent" not in u[
+                 "user_metadata"] or not u["user_metadata"]["invite_email_sent"], users))
     print(f"{len(users)} users that are missing login info")
 
     i = 0
     for user in users:
         i += 1
         print(f"\r\nprocessing {i}/{len(users)}")
-        send_info_to_user(auth, auth0_token, user, template)
+        send_info_to_user(auth, auth0_token, user, template, True)
         time.sleep(2)
 
-def test_send_info_to_user(auth: Authentication, auth0_token : str, template : dict, email : str):
+
+def check_and_send_to_all_users(auth: Authentication, auth0_token: str, template: dict):
+    users = retrieve_users_via_export(auth, auth0_token)
+    print(f"{len(users)} users retrieved")
+
+    i = 0
+    for user in users:
+        i += 1
+        print(f"\r\nprocessing {i}/{len(users)}")
+        send_info_to_user(auth, auth0_token, user, template, False)
+        if i % 10 == 9:
+            time.sleep(2)
+
+
+def test_send_info_to_user(auth: Authentication, auth0_token: str, template: dict, email: str):
     """
     """
     users = retrieve_users_via_export(auth, auth0_token)
     print(f"{len(users)} users retrieved")
-    user : dict = None
+    user: dict = None
     for u in users:
         if u["email"] == email:
             user = u
@@ -46,10 +65,11 @@ def test_send_info_to_user(auth: Authentication, auth0_token : str, template : d
         print(f"user with email {email} not found.")
         return
     print(user)
-    
-    send_info_to_user(auth, auth0_token, user, template)
 
-def monitor_users(auth: Authentication, auth0_token : str, template : dict):
+    send_info_to_user(auth, auth0_token, user, template, False)
+
+
+def monitor_users(auth: Authentication, auth0_token: str, template: dict):
     """
     """
     print("monitoring started...")
@@ -60,6 +80,12 @@ def monitor_users(auth: Authentication, auth0_token : str, template : dict):
             print(f"\r\nERROR OCCURRED: {e}\r\n")
         time.sleep(20*60)
 
+
+def send_to_all(auth: Authentication, auth0_token: str, template: dict):
+    print("send email to all auth0 users...")
+    check_and_send_to_all_users(auth, auth0_token, template)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Script to monitor new auth0 users and send out appropriate attendee info.')
@@ -68,8 +94,9 @@ if __name__ == '__main__':
                         action='store_true', default=False)
     parser.add_argument('--monitoring', help='monitor auth0 users and send info',
                         action='store_true', default=False)
+    parser.add_argument('--send', help='send email to all auth0 users',
+                        action='store_true', default=False)
 
-    
     parser.add_argument(
         '--token', help='auth0 access token', default=None)
     parser.add_argument(
@@ -85,9 +112,11 @@ if __name__ == '__main__':
     if not template_key or template_key not in templates:
         print(f"could not found template {template_key}")
         exit(-1)
-    template : dict = templates[template_key]
+    template: dict = templates[template_key]
 
     if args.test:
         test_send_info_to_user(auth, token, template, args.email)
     elif args.monitoring:
         monitor_users(auth, token, template)
+    elif args.send:
+        send_to_all(auth, token, template)
