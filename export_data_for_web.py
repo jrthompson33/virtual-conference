@@ -118,6 +118,9 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
     sheet_ext = GoogleSheets()
     sheet_ext.load_sheet("ItemsEXT")
 
+    sheet_ff = GoogleSheets()
+    sheet_ff.load_sheet("FFVideos")
+
     sheet_posters = GoogleSheets()
     sheet_posters.load_sheet("Posters")
 
@@ -128,6 +131,10 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
     db_papers_dict = dict()
     for db_p in sheet_db_papers.data:
         db_papers_dict[db_p["UID"]] = db_p
+
+    ff_dict = dict()
+    for ff in sheet_ff.data:
+        ff_dict[ff["FF Source ID"]] = ff
 
     # All tracks/rooms of the conference, create dict based on "Track"
     sheet_tracks = GoogleSheets()
@@ -228,6 +235,8 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
 
             p_db = db_papers_dict[p["Paper UID"]
                                   ] if p["Paper UID"] in db_papers_dict else None
+            ff = ff_dict[p["Paper UID"]
+                                  ] if p["Paper UID"] in ff_dict else None
 
             p_event_prefix = p_db["Event Prefix"] if p_db else ""
 
@@ -270,14 +279,15 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
                 "image_caption": p_db["Image Caption"] if p_db else "",
                 "external_paper_link": "",
                 "has_pdf": p_db["Has PDF"] == "1" if p_db else False,
-                "ff_link": ""
+                "ff_link": ff["FF Link"] if ff else "",
+                "ff_id": ff["FF Video ID"] if ff else ""
             }
 
             s_data["time_slots"].append(p_data)
 
             # All papers will have a UID
             # Should this be filtered for only full, short, cga, tvcg?
-            if p_data and p_data["uid"] and not "Q+A" in p_data["type"] and not "Q + A" in p_data["type"]:
+            if p_db and p_data and p_data["uid"] and not "Q+A" in p_data["type"] and not "Q + A" in p_data["type"]:
                 all_papers[p_data["uid"]] = p_data
 
         if s_data["event_prefix"] in all_events:
