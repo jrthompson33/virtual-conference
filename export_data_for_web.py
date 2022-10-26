@@ -121,6 +121,9 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
     sheet_ff = GoogleSheets()
     sheet_ff.load_sheet("FFVideos")
 
+    sheet_videos = GoogleSheets()
+    sheet_videos.load_sheet("Videos")
+
     sheet_posters = GoogleSheets()
     sheet_posters.load_sheet("Posters")
 
@@ -232,11 +235,10 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
 
         for p in filtered_papers + filtered_ext:
             # Find the corresponding entry by Paper UID in PapersDB
-
-            p_db = db_papers_dict[p["Paper UID"]
-                                  ] if p["Paper UID"] in db_papers_dict else None
-            ff = ff_dict[p["Paper UID"]
-                                  ] if p["Paper UID"] in ff_dict else None
+            uid = p["Paper UID"]
+            p_db = db_papers_dict[uid] if uid in db_papers_dict else None
+            ff = ff_dict[uid] if uid in ff_dict else None
+            video = sheet_videos.data_by_index[uid] if uid in sheet_videos.data_by_index else None
 
             p_event_prefix = p_db["Event Prefix"] if p_db else ""
 
@@ -274,13 +276,17 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
                 "keywords": [k.strip() for k in p_db["Keywords"].split("|")] if p_db and p_db["Keywords"] else [],
                 "has_image": p_db["Has Image"] if p_db else False,
                 "has_video": p_db["Has Video"] if p_db else False,
-                "has_video": p_db["Video Duration"] if p_db else "",
+                "video_duration": p_db["Video Duration"] if p_db else "",
                 "paper_award": p_db["Award"] if p_db else "",
                 "image_caption": p_db["Image Caption"] if p_db else "",
                 "external_paper_link": "",
                 "has_pdf": p_db["Has PDF"] == "1" if p_db else False,
                 "ff_link": ff["FF Link"] if ff else "",
-                "ff_id": ff["FF Video ID"] if ff else ""
+                "ff_id": ff["FF Video ID"] if ff else "",
+                "prerecorded_video_link": video["Video Link"] if video else "",
+                "prerecorded_video_id": video["Video ID"] if video else "",
+                "live_video_link": "",
+                "live_video_id": ""
             }
 
             s_data["time_slots"].append(p_data)
