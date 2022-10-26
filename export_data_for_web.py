@@ -3,7 +3,7 @@ import os
 import json
 from threading import local
 import ics
-from PIL import Image
+#from PIL import Image
 from datetime import timezone, datetime, timedelta
 import argparse
 
