@@ -129,6 +129,40 @@ def start_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
         res = yt.make_broadcast_live(broadcast_id, stream_key_id)
         print(json.dumps(res))
 
+
+def set_recordings_thumbs(yt : YouTubeHelper, args : argparse.Namespace):
+    """set generated thumbnail images for each recording in Recordings sheet
+    """
+    if not args.path or len(args.path) == 0:
+        print("--path has to be provided")
+        return
+    recordings = GoogleSheets()
+    recordings.load_sheet("Recordings")
+
+    for recording in recordings.data:
+        if recording["Thumbnail Uploaded"] == "y":
+            continue
+        sid : str = recording["Source ID"]
+        print(f"\r\nSetting thumbnail for {sid}...\r\n")
+        link : str = recording["YouTube Link"]
+        if not link or not link.startswith("https"):
+            print(f"missing or invalid youtube link for {sid}")
+            continue
+
+        path = os.path.join(args.path, sid + ".png")
+        if not os.path.isfile(path):
+            print(f"MISSING thumbnail for id {sid}")
+            continue
+        res = yt.set_thumbnail(link[32:], path)
+        print(json.dumps(res))
+        recording["Thumbnail Uploaded"] = "y"
+        try:
+            recordings.save()
+        except BaseException as ex:
+            print("\r\nsaving failed: ")
+            print(ex)
+        
+
 def schedule_broadcasts(yt : YouTubeHelper, args : argparse.Namespace):
     """schedule broadcasts from sheet, possibly filtered by dow = Day of Week
     """
@@ -833,6 +867,8 @@ if __name__ == '__main__':
                         action='store_true', default=False)
     parser.add_argument('--upload_videos', help='upload presentation videos in specified path and based on Videos sheet',
                         action='store_true', default=False)
+    parser.add_argument('--set_recordings_thumbs', help='upload thumbnails for videos in Recordings sheet',
+                        action='store_true', default=False)
 
     
     parser.add_argument('--populate_ffpl_sheet', help='populate fast forward playlists sheet based on events and sessions',
@@ -943,3 +979,5 @@ if __name__ == '__main__':
         upload_ff_videos(yt, args)
     elif args.upload_videos:
         upload_videos(yt, args)
+    elif args.set_recordings_thumbs:
+        set_recordings_thumbs(yt, args)
