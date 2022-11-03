@@ -1,4 +1,5 @@
 from calendar import Calendar
+from colorsys import yiq_to_rgb
 import os
 import json
 from threading import local
@@ -153,6 +154,10 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
     for b in sheet_broadcasts.data:
         broadcasts_dict[b["Livestream ID"]] = b
 
+    sheet_recordings = GoogleSheets()
+    sheet_recordings.load_sheet("Recordings")
+    recordings_dict = sheet_recordings.data_by_index
+
     # ['Event', 'Event Type', 'Event Prefix', 'Event Description',
     #  'Event URL', 'Organizers', 'Organizer Emails']
 
@@ -182,13 +187,17 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
 
     # Create session data
     for s in sheet_sessions.data:
+        sid = s["Session ID"]
         t = tracks_dict[s["Track"]] if s["Track"] in tracks_dict else None
         b = broadcasts_dict[s["Livestream ID"]
                             ] if s["Livestream ID"] in broadcasts_dict else None
-
+        yt_rec_link = recordings_dict[sid]["YouTube Link"].strip() if sid in recordings_dict else ""
+        yt_rec_id = ""
+        if yt_rec_link and len(yt_rec_link) > 32:
+            yt_rec_id = yt_rec_link[32:]
         s_data = {
             "title": s["Session Title"],
-            "session_id": s["Session ID"],
+            "session_id": sid,
             "event_prefix": s["Event Prefix"],
             "track": s["Track"],
             "livestream_id": s["Livestream ID"],
@@ -204,6 +213,8 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             "slido_link": t["Slido URL"] if t else "",
             "youtube_url": b["YouTube URL"] if b else "https://youtu.be/_evorVC17Yg",
             "youtube_id": b["Video ID"] if b else "_evorVC17Yg",
+            "youtube_rec_url": yt_rec_link,
+            "youtube_rec_id": yt_rec_id,
             "zoom_meeting": "",
             "zoom_password": "",
             "zoom_link": "",
