@@ -32,7 +32,7 @@ def send_emails_to_authors(auth: Authentication, papers_csv_file: str, event_pre
         elif event_prefix == "w-altvis" or event_prefix == "w-biomedicalai" or event_prefix == "w-nlvis" or event_prefix == "w-viscomm" or event_prefix == "w-vis4climate" or event_prefix == "w-visxai":
             template = templates["upload_request_workshop_no_xplore"]
         elif event_prefix == "v-short" or event_prefix == "v-full":
-            template = templates["upload_request"]
+            template = templates["upload_request_full_short"]
     elif email_template == "missing_preview":
         if event_prefix == "v-cga" or event_prefix == "v-tvcg":
             template = templates["missing_preview_tvcg_cga"]
