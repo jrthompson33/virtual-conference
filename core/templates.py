@@ -1,4 +1,5 @@
 import json
+import os.path
 
 def load_templates_dict() -> dict:
     """Loads template strings dict from 'template_strings.json'.
@@ -20,6 +21,6 @@ def load_templates_dict() -> dict:
         }
     }
     """
-    with open("template_strings.json", "r", encoding='utf-8') as f:
+    with open(os.path.join("templates", "template_strings_2023.json"), "r", encoding='utf-8') as f:
         dct = json.load(f, )
         return dct
