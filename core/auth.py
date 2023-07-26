@@ -48,12 +48,18 @@ from google.auth.transport.requests import Request
 #    },
 #    "gsheets": {
 #       "db_link": ""
+#    },
+#   "asn": {
+#       "username": "",
+#       "password": "",
 #    }
 # }
+
+
 class Authentication:
     def __init__(self, youtube=False, email=False, use_pickled_credentials=False,
-            eventbrite_api=False,
-            auth0_api=False):
+                 eventbrite_api=False,
+                 auth0_api=False):
         # Setup API clients
         auth_file = ""
         if "SUPERMINISTREAM_AUTH_FILE" in os.environ:
@@ -68,15 +74,15 @@ class Authentication:
         yt_pickle_file = "YOUTUBE_AUTH_PICKLE_FILE.bin"
         if "YOUTUBE_AUTH_PICKLE_FILE" in os.environ:
             yt_pickle_file = os.environ["YOUTUBE_AUTH_PICKLE_FILE"]
-                   
-        
+
         with open(auth_file, "r") as f:
             auth = json.load(f)
             self.discord = auth["discord"]
             self.dropbox = auth["dropbox"]
             self.cvent = auth["cvent"]
             self.gsheets = auth["gsheets"]
-                
+            self.asn = auth["asn"]
+
             self.zoom = {
                 "authorization": "Bearer {}".format(auth["zoom"]["jwt_token"]),
                 "content-type": "application/json"
@@ -87,15 +93,17 @@ class Authentication:
 
             if email:
                 self.email = boto3.client("ses",
-                        aws_access_key_id=auth["aws"]["access_key"],
-                        aws_secret_access_key=auth["aws"]["secret_key"],
-                        region_name=auth["aws"]["region"])
+                                          aws_access_key_id=auth["aws"]["access_key"],
+                                          aws_secret_access_key=auth["aws"]["secret_key"],
+                                          region_name=auth["aws"]["region"])
 
             if youtube:
-                self.youtube = self.authenticate_youtube(auth, use_pickled_credentials, yt_pickle_file)
+                self.youtube = self.authenticate_youtube(
+                    auth, use_pickled_credentials, yt_pickle_file)
 
             if eventbrite_api:
-                self.eventbrite = eventbrite.Eventbrite(auth["eventbrite"]) #does not work
+                self.eventbrite = eventbrite.Eventbrite(
+                    auth["eventbrite"])  # does not work
             self.eventbrite_event_id = auth["eventbrite_event_id"]
             self.eventbrite_token = auth["eventbrite"]
             if "auth0" in auth:
@@ -103,9 +111,9 @@ class Authentication:
 
     def authenticate_youtube(self, auth, use_pickled_credentials, yt_pickle_file):
         yt_scopes = ["https://www.googleapis.com/auth/youtube",
-            "https://www.googleapis.com/auth/youtube.readonly",
-            "https://www.googleapis.com/auth/youtube.force-ssl"]
-                
+                     "https://www.googleapis.com/auth/youtube.readonly",
+                     "https://www.googleapis.com/auth/youtube.force-ssl"]
+
         credentials = None
         if use_pickled_credentials and os.path.exists(yt_pickle_file):
             with open(yt_pickle_file, "rb") as f:
@@ -132,9 +140,9 @@ class Authentication:
             "audience": self.auth0["audience"],
             "grant_type": "client_credentials"
         }
-        domain = self.auth0["domain"] #"https://" + urlsplit(self.auth0["audience"]).netloc
-        resp = requests.post("https://" + domain + "/oauth/token", json=auth0_payload).json()
+        # "https://" + urlsplit(self.auth0["audience"]).netloc
+        domain = self.auth0["domain"]
+        resp = requests.post("https://" + domain +
+                             "/oauth/token", json=auth0_payload).json()
         print(resp)
         return resp["access_token"]
-
-
