@@ -7,7 +7,7 @@ import argparse
 import time
 
 
-def send_emails_to_authors(auth: Authentication, papers_csv_file: str, event_prefix: str, email_template: str):
+def send_emails_to_authors(auth: Authentication, papers_csv_file: str, event_prefix: str, email_template: str, uid: str = None):
     """send email for papers .
     authentication: Authentication instance in which aws ses client was authenticated
     papers_csv_file: path to papers db file
@@ -52,8 +52,12 @@ def send_emails_to_authors(auth: Authentication, papers_csv_file: str, event_pre
     elif email_template == "reminder_survey":
         template = templates["reminder_survey"]
 
-    papers = list(
-        filter(lambda p: p["Event Prefix"] == event_prefix, papersDb.data))
+    if uid is not None:
+        papers = list(filter(lambda p: p["UID"] == uid, papersDb.data)) 
+    elif event_prefix is not None:
+        papers = list(
+            filter(lambda p: p["Event Prefix"] == event_prefix, papersDb.data))
+
 
     print(f"{len(papersDb.data)} total papers loaded, filtered for {event_prefix}, for which {len(papers)} papers will be processed.")
 
@@ -81,6 +85,8 @@ if __name__ == '__main__':
     parser.add_argument(
         '--event_prefix', help='filter papers that match the event prefix', default=None)
     parser.add_argument(
+        '--uid', help='filter papers that match this UID', default=None)
+    parser.add_argument(
         '--email_template', help='template to use for the email (e.g., \"upload_request\", \"missing_preview\")', default="upload_request")
 
     args = parser.parse_args()
@@ -95,4 +101,4 @@ if __name__ == '__main__':
         # send emails only if event_prefix provided, never send all db
         if args.event_prefix is not None:
             send_emails_to_authors(
-                auth, args.papers_csv_file, args.event_prefix, args.email_template)
+                auth, args.papers_csv_file, args.event_prefix, args.email_template, args.uid)
