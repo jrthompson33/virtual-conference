@@ -17,20 +17,12 @@ def send_emails_to_authors(auth: Authentication, papers_csv_file: str, event_pre
     papersDb = PapersDatabase(papers_csv_file)
     templates = load_templates_dict()
     if email_template == "upload_request":
-        if event_prefix == "v-cga" or event_prefix == "v-tvcg":
-            template = templates["upload_request_tvcg_cga"]
-        elif event_prefix == "a-ldav" or event_prefix == "a-vizsec" or event_prefix == "a-vds":
-            template = templates["upload_request_symposia"]
-        elif event_prefix == "a-visap":
-            template = templates["upload_request_visap"]
-        elif event_prefix == "a-vast" or event_prefix == "a-scivis" or event_prefix == "a-biovischallenge":
-            template = templates["upload_request_competition"]
+        if event_prefix == "a-vast-challenge":
+            template = templates["upload_request_associated_event_workshop_late"]
+        elif event_prefix == "a-ldav" or event_prefix == "a-vizsec" or event_prefix == "a-vds" or event_prefix == "a-visap" or event_prefix == "w-vis4dh" or event_prefix == "w-topoinvis" or event_prefix == "w-energyvis" or event_prefix == "w-vis4good" or event_prefix == "w-eduvis" or event_prefix == "w-visxvision" or event_prefix == "w-vahc" or event_prefix == "w-visxprov" or event_prefix == "a-scivis-challenge" or event_prefix == "a-biomedchallenge" or event_prefix == "w-altvis" or event_prefix == "w-viscomm" or event_prefix == "w-cityvis" or event_prefix == "w-nlviz" or event_prefix == "s-vds" or event_prefix == "w-vis4pandemres":
+            template = templates["upload_request_associated_event_workshop"]
         elif event_prefix == "v-siggraph" or event_prefix == "v-ismar" or event_prefix == "v-vr":
             template = templates["upload_request_vr_ismar"]
-        elif event_prefix == "w-topoinvis" or event_prefix == "w-trex" or event_prefix == "w-visguides" or event_prefix == "w-vis4good" or event_prefix == "w-testvis" or event_prefix == "w-beliv" or event_prefix == "w-vis4dh":
-            template = templates["upload_request_workshop_xplore"]
-        elif event_prefix == "w-altvis" or event_prefix == "w-biomedicalai" or event_prefix == "w-nlvis" or event_prefix == "w-viscomm" or event_prefix == "w-vis4climate" or event_prefix == "w-visxai":
-            template = templates["upload_request_workshop_no_xplore"]
         elif event_prefix == "v-short" or event_prefix == "v-full":
             template = templates["upload_request_full_short"]
     elif email_template == "missing_preview":
@@ -53,11 +45,10 @@ def send_emails_to_authors(auth: Authentication, papers_csv_file: str, event_pre
         template = templates["reminder_survey"]
 
     if uid is not None:
-        papers = list(filter(lambda p: p["UID"] == uid, papersDb.data)) 
+        papers = list(filter(lambda p: p["UID"] == uid, papersDb.data))
     elif event_prefix is not None:
         papers = list(
             filter(lambda p: p["Event Prefix"] == event_prefix, papersDb.data))
-
 
     print(f"{len(papersDb.data)} total papers loaded, filtered for {event_prefix}, for which {len(papers)} papers will be processed.")
 
