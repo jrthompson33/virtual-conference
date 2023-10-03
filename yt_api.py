@@ -234,52 +234,29 @@ def populate_ffpl_sheet(args : argparse.Namespace):
     num_added = 0
 
     #add playlists rows for combined events
-    src_id : str = "associated"
-    ev_title = "Associated Events"
-    item = {}
-    item["FF P Source ID"] = src_id
-    item["FF P ID"] = ""
-    item["FF P Title"] = f"{ev_title} - Fast Forwards | {args.venue}"
-    item["FF P Description"] = f"Fast forwards for event '{ev_title}' at {args.venue}"
-    if not src_id in playlists.data_by_index:
-        playlists.data.append(item)
-        playlists.data_by_index[src_id] = item
-        num_added += 1
+    combined = [ [ "associated", "Associated Events" ], [ "workshop", "Workshops"], [ "tutorial", "Tutorials"] ]
+    for src_id, ev_title in combined:        
+        item = {}
+        item["FF P Source ID"] = src_id
+        item["FF P ID"] = ""
+        item["FF P Title"] = f"{ev_title} - Fast Forwards | {args.venue}"
+        item["FF P Description"] = f"Fast forwards for {ev_title.lower()} at {args.venue}"
+        if not src_id in playlists.data_by_index:
+            playlists.data.append(item)
+            playlists.data_by_index[src_id] = item
+            num_added += 1
 
-    src_id = "workshop"
-    ev_title = "Workshops"
-    item = {}
-    item["FF P Source ID"] = src_id
-    item["FF P ID"] = ""
-    item["FF P Title"] = f"{ev_title} - Fast Forwards | {args.venue}"
-    item["FF P Description"] = f"Fast forwards for event '{ev_title}' at {args.venue}"
-    if not src_id in playlists.data_by_index:
-        playlists.data.append(item)
-        playlists.data_by_index[src_id] = item
-        num_added += 1
-
-    src_id = "tutorial"
-    ev_title = "Tutorials"
-    item = {}
-    item["FF P Source ID"] = src_id
-    item["FF P ID"] = ""
-    item["FF P Title"] = f"{ev_title} - Fast Forwards | {args.venue}"
-    item["FF P Description"] = f"Fast forwards for event '{ev_title}' at {args.venue}"
-    if not src_id in playlists.data_by_index:
-        playlists.data.append(item)
-        playlists.data_by_index[src_id] = item
-        num_added += 1
 
     #add playlist rows for each event
     for ev in events.data:
         src_id : str = ev["Event Prefix"]
         if src_id in playlists.data_by_index:
             continue
-        if not src_id.startswith("v-"):
+        if args.only_v and not src_id.startswith("v-"):
             continue
         ev_title = ev["Event"]
         title = f"{ev_title} - Fast Forwards | {args.venue}"
-        desc = f"Fast forwards for event '{ev_title}' at {args.venue}"
+        desc = f"Fast forwards for {ev_title} at {args.venue}"
         item = {}
         item["FF P Source ID"] = src_id
         item["FF P ID"] = ""
@@ -290,24 +267,26 @@ def populate_ffpl_sheet(args : argparse.Namespace):
         num_added += 1
 
     #add playlist rows for each session
-    for s in sessions.data:
-        src_id = s["Session ID"]
-        if src_id in playlists.data_by_index:
-            continue
-        if s["Track"] == "various":
-            continue #not livestreamed
-        s_title = s["Session Title"]
-        title = f"{s_title} - Fast Forwards | {args.venue}"        
-        desc = f"Fast forwards for session '{s_title}' at {args.venue}"
-        item = {}
-        item["FF P Source ID"] = src_id
-        item["FF P ID"] = ""
-        item["FF P Title"] = title
-        item["FF P Description"] = desc
-        #for now ignore sessions, too many playlists
-        #playlists.data.append(item)
-        #playlists.data_by_index[src_id] = item
-        #num_added += 1
+    
+    if args.create_session_playlists:
+        for s in sessions.data:
+            src_id = s["Session ID"]
+            if src_id in playlists.data_by_index:
+                continue
+            if s["Track"] == "various":
+                continue #not livestreamed
+            s_title = s["Session Title"]
+            title = f"{s_title} - Fast Forwards | {args.venue}"        
+            desc = f"Fast forwards for session '{s_title}' at {args.venue}"
+            item = {}
+            item["FF P Source ID"] = src_id
+            item["FF P ID"] = ""
+            item["FF P Title"] = title
+            item["FF P Description"] = desc
+            
+            playlists.data.append(item)
+            playlists.data_by_index[src_id] = item
+            num_added += 1
 
     playlists.save()
     print(f"{num_added} playlist rows added.")
@@ -324,14 +303,30 @@ def populate_pl_sheet(args : argparse.Namespace):
 
     num_added = 0
 
+    #add playlists rows for combined events
+    combined = [ [ "associated", "Associated Events" ], [ "workshop", "Workshops"], [ "tutorial", "Tutorials"] ]
+    for src_id, ev_title in combined:        
+        item = {}
+        item["P Source ID"] = src_id
+        item["P ID"] = ""
+        item["P Title"] = f"{ev_title} - Presentations | {args.venue}"
+        item["P Description"] = f"Pre-recorded presentations for {ev_title.lower()} at {args.venue}"
+        if not src_id in playlists.data_by_index:
+            playlists.data.append(item)
+            playlists.data_by_index[src_id] = item
+            num_added += 1
+
+
     #add playlist rows for each event
     for ev in events.data:
         src_id = ev["Event Prefix"]
         if src_id in playlists.data_by_index:
             continue
+        if args.only_v and not src_id.startswith("v-"):
+            continue
         ev_title = ev["Event"]
         title = f"{ev_title} - Presentations | {args.venue}"
-        desc = f"Pre-recorded presentations for event '{ev_title}' at {args.venue}"
+        desc = f"Pre-recorded presentations for {ev_title} at {args.venue}"
         item = {}
         item["P Source ID"] = src_id
         item["P ID"] = ""
@@ -341,25 +336,26 @@ def populate_pl_sheet(args : argparse.Namespace):
         playlists.data_by_index[src_id] = item
         num_added += 1
 
-    #add playlist rows for each session
-    for s in sessions.data:
-        src_id = s["Session ID"]
-        if src_id in playlists.data_by_index:
-            continue
-        if s["Track"] == "various":
-            continue #not livestreamed
+    if args.create_session_playlists:
+        #add playlist rows for each session
+        for s in sessions.data:
+            src_id = s["Session ID"]
+            if src_id in playlists.data_by_index:
+                continue
+            if s["Track"] == "various":
+                continue #not livestreamed
 
-        s_title = s["Session Title"]
-        title = f"{s_title} - Presentations | {args.venue}"        
-        desc = f"Pre-recorded presentations for session '{s_title}' at {args.venue}"
-        item = {}
-        item["P Source ID"] = src_id
-        item["P ID"] = ""
-        item["P Title"] = title
-        item["P Description"] = desc
-        playlists.data.append(item)
-        playlists.data_by_index[src_id] = item
-        num_added += 1
+            s_title = s["Session Title"]
+            title = f"{s_title} - Presentations | {args.venue}"        
+            desc = f"Pre-recorded presentations for session '{s_title}' at {args.venue}"
+            item = {}
+            item["P Source ID"] = src_id
+            item["P ID"] = ""
+            item["P Title"] = title
+            item["P Description"] = desc
+            playlists.data.append(item)
+            playlists.data_by_index[src_id] = item
+            num_added += 1
 
     playlists.save()
     print(f"{num_added} playlist rows added.")
@@ -735,7 +731,7 @@ def populate_videos(args : argparse.Namespace):
             if event in playlists.data_by_index:
                 ref_playlists.append(event)
 
-            if event.startswith("a-") and "associated" in playlists.data_by_index:
+            if (event.startswith("a-") or event.startswith("s-")) and "associated" in playlists.data_by_index:
                 ref_playlists.append("associated")
             elif event.startswith("w-") and "workshop" in playlists.data_by_index:
                 ref_playlists.append("workshop")
@@ -890,14 +886,22 @@ if __name__ == '__main__':
     parser.add_argument('--start_time', help='start time of scheduled broadcast in the "%Y-%m-%d %H:%M" format in your local time zone', default=None)
     parser.add_argument('--path', help='path to file or directory that should be uploaded, e.g. video file', default=None)
     parser.add_argument('--dow', help='day of week for scheduling broadcasts', default=None)
-    parser.add_argument('--venue', help='venue title for titles, descriptions', default="VIS 2022")
+    parser.add_argument('--venue', help='venue title for titles, descriptions', default="VIS 2023")
     parser.add_argument('--max_n_uploads', help='maximum number of video uploads', default=10, type=int)
+    parser.add_argument('--create_session_playlists', help='when populating video playlists also create playlists for sessions',
+                        action='store_true', default=False)
+    parser.add_argument('--only_v', help='when populating playlists only create playlists for events starting with v-',
+                        action='store_true', default=True)
+    
+    parser.add_argument('--no_auth', help='do not instantiate YouTubeHelper with authentication',
+                        action='store_true', default=False)
+    
 
 
     
     args = parser.parse_args()
 
-    yt = YouTubeHelper()
+    yt = None if args.no_auth else YouTubeHelper()
 
     if args.playlists:
         playlists = yt.get_all_playlists()
