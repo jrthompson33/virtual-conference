@@ -52,6 +52,9 @@ from google.auth.transport.requests import Request
 #   "asn": {
 #       "username": "",
 #       "password": "",
+#    },
+#   "pmu": {
+#       "items_url": ""
 #    }
 # }
 
@@ -108,6 +111,8 @@ class Authentication:
             self.eventbrite_token = auth["eventbrite"]
             if "auth0" in auth:
                 self.auth0 = auth["auth0"]
+            if "pmu" in auth:
+                self.pmu = auth["pmu"]
 
     def authenticate_youtube(self, auth, use_pickled_credentials, yt_pickle_file):
         yt_scopes = ["https://www.googleapis.com/auth/youtube",

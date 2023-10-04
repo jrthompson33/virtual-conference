@@ -6,7 +6,11 @@ import time
 import glob
 import argparse
 import json
+from typing import Any, Dict
+import urllib.request
 from datetime import datetime
+from core.auth import Authentication
+from core.pmu_helper import PmuHelper
 
 from core.yt_helper import YouTubeHelper
 from core.google_sheets import GoogleSheets
@@ -642,11 +646,9 @@ def populate_videos(args : argparse.Namespace):
     ff_videos = GoogleSheets()
     ff_videos.load_sheet("FFVideos" if is_ff else "Videos")
     items1 = GoogleSheets()
-    items1.load_sheet("ItemsVISPapers-A")
+    items1.load_sheet("ItemsVIS-A")    
     items2 = GoogleSheets()
-    items2.load_sheet("ItemsVISSpecial")
-    items3 = GoogleSheets()
-    items3.load_sheet("ItemsEXT")
+    items2.load_sheet("ItemsEXT")
     events = GoogleSheets()
     events.load_sheet("Events")
     
@@ -665,6 +667,29 @@ def populate_videos(args : argparse.Namespace):
         uid = pure_name[:id_idx]
         if uid in ff_videos.data_by_index:
             continue #already present
+        if args.prefix is not None and len(args.prefix) > 0 and not uid.startswith(args.prefix):
+            continue #skip if prefix is specified and does not match
+
+        subs_fn = ""
+        thumb_fn = ""
+        prefix = os.path.join(cur_dir, pure_name)
+        if os.path.isfile(prefix + ".srt"):
+            subs_fn = pure_name + ".srt"
+        elif os.path.isfile(prefix + ".sbv"):
+            subs_fn = pure_name + ".sbv"
+        else:
+            #we might have slightly different naming for subtitles:
+            #subs_p = find_file_by_uid(cur_dir, item_uid, ".srt")
+            #if not subs_p:
+            #    subs_p = find_file_by_uid(cur_dir, item_uid, ".sbv")
+            #if subs_p:
+            #    subs_fn = str(subs_p)
+            print(f"WARNING: {pure_name} does not have a subtitles file!")
+
+        if os.path.isfile(prefix + ".png"):
+            thumb_fn = pure_name + ".png"
+        elif os.path.isfile(prefix + ".jpg"):
+            thumb_fn = pure_name + ".jpg"
 
         session_id = ""
         ref_playlists = []
@@ -709,8 +734,6 @@ def populate_videos(args : argparse.Namespace):
                 items_by_index = items1.data_by_index
             elif item_uid in items2.data_by_index:
                 items_by_index = items2.data_by_index
-            elif item_uid in items3.data_by_index:
-                items_by_index = items3.data_by_index
 
             if items_by_index:
                 session_id = items_by_index[item_uid]["Session ID"]
@@ -738,26 +761,7 @@ def populate_videos(args : argparse.Namespace):
             elif event.startswith("t-") and "tutorial" in playlists.data_by_index:
                 ref_playlists.append("tutorial")
 
-        subs_fn = ""
-        thumb_fn = ""
-        prefix = os.path.join(cur_dir, pure_name)
-        if os.path.isfile(prefix + ".srt"):
-            subs_fn = pure_name + ".srt"
-        elif os.path.isfile(prefix + ".sbv"):
-            subs_fn = pure_name + ".sbv"
-        else:
-            #we might have slightly different naming for subtitles:
-            #subs_p = find_file_by_uid(cur_dir, item_uid, ".srt")
-            #if not subs_p:
-            #    subs_p = find_file_by_uid(cur_dir, item_uid, ".sbv")
-            #if subs_p:
-            #    subs_fn = str(subs_p)
-            print(f"WARNING: {pure_name} does not have a subtitles file!")
-
-        if os.path.isfile(prefix + ".png"):
-            thumb_fn = pure_name + ".png"
-        elif os.path.isfile(prefix + ".jpg"):
-            thumb_fn = pure_name + ".jpg"
+        
         if is_ff:
             ffvideo = {          
                 "FF Source ID" : uid,
@@ -768,6 +772,7 @@ def populate_videos(args : argparse.Namespace):
                 "FF Description" : desc,
                 "Session ID" : session_id,
                 "Slot DateTime Start": start_time,
+                "Ready": "0",
                 "FF Playlists" : "|".join(ref_playlists),
                 "FF Video ID" : "",
                 "FF Link" : "",
@@ -784,6 +789,7 @@ def populate_videos(args : argparse.Namespace):
                 "Video Description" : desc,
                 "Session ID" : session_id,
                 "Slot DateTime Start": start_time,
+                "Ready": "0",
                 "Playlists" : "|".join(ref_playlists),
                 "Video ID" : "",
                 "Video Link" : "",
@@ -800,6 +806,129 @@ def populate_videos(args : argparse.Namespace):
     ff_videos.save()
     print(f"{num_added} rows added.")
 
+
+def populate_videos_papersdb(args : argparse.Namespace):
+    """populate FFVideos or Videos sheet based on PapersDB sheet and PMU system
+    """
+    
+    pmu = PmuHelper()
+    is_ff : bool = args.populate_ff_videos
+    playlists = GoogleSheets()
+    playlists.load_sheet("FFPlaylists" if is_ff else "Playlists")
+    papers = GoogleSheets()
+    papers.load_sheet("PapersDB")
+    sessions = GoogleSheets()
+    sessions.load_sheet("Sessions")
+    ff_videos = GoogleSheets()
+    ff_videos.load_sheet("FFVideos" if is_ff else "Videos")
+    items1 = GoogleSheets()
+    items1.load_sheet("ItemsVIS-A")    
+    items2 = GoogleSheets()
+    items2.load_sheet("ItemsEXT")
+    events = GoogleSheets()
+    events.load_sheet("Events")
+    
+    num_added = 0
+    to_add = []
+    for paper in papers.data:
+        uid : str = paper["UID"]
+        if uid in ff_videos.data_by_index:
+            continue #already present
+        if args.prefix is not None and len(args.prefix) > 0 and not uid.startswith(args.prefix):
+            continue #skip if prefix is specified and does not match
+
+        print(uid)
+        
+        video_url, subs_url = pmu.get_video_urls(uid)
+        if video_url is None or len(video_url) == 0:
+            print(f"WARNING: could not find PMU video for {uid}")
+            continue
+        if subs_url == "":
+            subs_url = None
+
+                
+        fn = ":pmu:"
+
+        session_id = ""
+        ref_playlists = []
+        start_time = ""
+        title = ""
+        desc = ""
+
+    
+        items_by_index = None
+        if uid in items1.data_by_index:
+            items_by_index = items1.data_by_index
+        elif uid in items2.data_by_index:
+            items_by_index = items2.data_by_index
+
+        if items_by_index:
+            session_id = items_by_index[uid]["Session ID"]
+            start_time = items_by_index[uid]["Slot DateTime Start"]
+            
+        event_title = paper["Event"]
+        event = paper["Event Prefix"]
+        paper_title = paper["Title"]
+        authors :str = paper["Authors"]
+        if authors and len(authors) > 0:
+            authors = authors.replace("|", ", ")
+        title = f"{paper_title} - Fast Forward | {args.venue}" if is_ff else f"{paper_title} | {args.venue}"
+        desc = f"{event_title} Fast Forward: {paper_title}\r\nAuthors: {authors}" if is_ff else f"{event_title}: {paper_title}\r\nAuthors: {authors}"
+
+        if event and len(event) > 0:
+            if event in playlists.data_by_index:
+                ref_playlists.append(event)
+
+            if (event.startswith("a-") or event.startswith("s-")) and "associated" in playlists.data_by_index:
+                ref_playlists.append("associated")
+            elif event.startswith("w-") and "workshop" in playlists.data_by_index:
+                ref_playlists.append("workshop")
+            elif event.startswith("t-") and "tutorial" in playlists.data_by_index:
+                ref_playlists.append("tutorial")
+
+        
+        if is_ff:
+            ffvideo = {          
+                "FF Source ID" : uid,
+                "FF File Name" : fn,
+                "FF Subtitles File Name" : fn if subs_url is not None else "",
+                "FF Thumbnail File Name" : "",
+                "FF Title" : title,
+                "FF Description" : desc,
+                "Session ID" : session_id,
+                "Slot DateTime Start": start_time,
+                "Ready": "0",
+                "FF Playlists" : "|".join(ref_playlists),
+                "FF Video ID" : "",
+                "FF Link" : "",
+                "Subtitles Uploaded" : ""
+                }
+            to_add.append(ffvideo)
+        else:
+            video = {          
+                "Video Source ID" : uid,
+                "Video File Name" : fn,
+                "Video Subtitles File Name" : fn if subs_url is not None else "",
+                "Video Thumbnail File Name" : "",
+                "Video Title" : title,
+                "Video Description" : desc,
+                "Session ID" : session_id,
+                "Slot DateTime Start": start_time,
+                "Ready": "0",
+                "Playlists" : "|".join(ref_playlists),
+                "Video ID" : "",
+                "Video Link" : "",
+                "Subtitles Uploaded" : ""
+                }
+            to_add.append(video)
+        num_added += 1
+    #important to add videos in correct order to playlist based on their scheduled time
+    uid_col_name = "FF Source ID" if is_ff else "Video Source ID"
+    for it in to_add:        
+        ff_videos.data.append(it)
+        ff_videos.data_by_index[it[uid_col_name]] = it
+    ff_videos.save()
+    print(f"{num_added} rows added.")
 
 if __name__ == '__main__':
     
@@ -877,7 +1006,10 @@ if __name__ == '__main__':
                         action='store_true', default=False)
     parser.add_argument('--populate_videos', help='populate videos sheet based on files in specified folder',
                         action='store_true', default=False)
+    parser.add_argument('--populate_videos_pmu', help='populate videos sheet based on PapersDB and PMU items',
+                        action='store_true', default=False)
     
+    parser.add_argument('--prefix', help='fitler by prefix of uid', default=None)
     parser.add_argument('--id', help='id of item (e.g., video)', default=None)
     parser.add_argument('--channel_id', help='id of channel', default=None)
     parser.add_argument('--stream_key', help='id of stream key', default=None)
@@ -979,6 +1111,8 @@ if __name__ == '__main__':
         populate_videos(args)
     elif args.populate_videos:
         populate_videos(args)
+    elif args.populate_videos_pmu:
+        populate_videos_papersdb(args)
     elif args.upload_ff_videos:
         upload_ff_videos(yt, args)
     elif args.upload_videos:

@@ -27,7 +27,7 @@ class GoogleSheets:
         """Load data from sheet with the name sheet_name.
             First column is used as index if field name ends with ID (self.data_by_index)
         """
-        url = self._link + "/gviz/tq?tqx=out:csv&sheet=" + sheet_name;
+        url = self._link + "/gviz/tq?tqx=out:csv&sheet=" + sheet_name
         resp = urllib.request.urlopen(url)
         lines = [ l.decode('utf-8') for l in resp.readlines() ]
         cr = csv.DictReader(lines)
