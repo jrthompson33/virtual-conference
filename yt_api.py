@@ -443,6 +443,8 @@ def upload_ff_videos(yt : YouTubeHelper, args : argparse.Namespace):
     if args.max_n_uploads and args.max_n_uploads < max_n_uploads:
         max_n_uploads = args.max_n_uploads
     for row in videos.data:
+        if row["Ready"] != "1":
+            continue
         ex_id = row["FF Video ID"]
         captions_uploaded = row["Subtitles Uploaded"] == "y"
         if ex_id and len(ex_id) > 0 and captions_uploaded:
@@ -531,18 +533,24 @@ def upload_videos(yt : YouTubeHelper, args : argparse.Namespace):
     #path = Path(args.path)    
     #channel_id = args.channel_id
     #uploads_p_id = "UU" + channel_id[2:]
-
+    if args.path is None or len(args.path) == 0:
+        print("--path has to be provided")
+        return
+    
     playlists = GoogleSheets()
     playlists.load_sheet("Playlists")
     videos = GoogleSheets()
     videos.load_sheet("Videos")
     num_playlists_created = 0
     num_videos_uploaded = 0
+    pmu : PmuHelper = None
 
     max_n_uploads = 100
     if args.max_n_uploads and args.max_n_uploads < max_n_uploads:
         max_n_uploads = args.max_n_uploads
     for row in videos.data:
+        if row["Ready"] != "1":
+            continue
         ex_id = row["Video ID"]
         captions_uploaded = row["Subtitles Uploaded"] == "y"
         if ex_id and len(ex_id) > 0 and captions_uploaded:
@@ -550,9 +558,24 @@ def upload_videos(yt : YouTubeHelper, args : argparse.Namespace):
 
         src_id = row["Video Source ID"]
         print(f"\r\nprocessing {src_id}")
-        video_path = find_file(args.path, row["Video File Name"])
-        subs_path = find_file(args.path, row["Video Subtitles File Name"])
-        thumb_path = find_file(args.path, row["Video Thumbnail File Name"])
+
+        vfn = row["Video File Name"]
+        is_pmu = False
+        video_path : str = None
+        subs_path : str = None
+        thumb_path : str = None
+        if vfn == ":pmu:":
+            is_pmu = True
+            if pmu is None:
+                pmu = PmuHelper()
+            p1, p2 = pmu.download_presentation_video(src_id, args.path)
+            video_path = Path(p1)
+            subs_path = Path(p2) if p2 is not None else None
+        else:
+            video_path = find_file(args.path, vfn)
+            subs_path = find_file(args.path, row["Video Subtitles File Name"])
+            thumb_path = find_file(args.path, row["Video Thumbnail File Name"])
+
         if not video_path:
             print(f"ERROR: video not found: {video_path}")
             continue
@@ -624,6 +647,14 @@ def upload_videos(yt : YouTubeHelper, args : argparse.Namespace):
                     print(f"\r\nsaving videos.csv failed: {str(ex)}")
             except BaseException as e:
                 print(f"error occurred while uploading subtitles:\r\n{str(e)}")
+
+        if is_pmu:
+            #delete temp download files       
+            print("\r\ndeleting temp files...")     
+            os.remove(str(video_path))
+            if subs_path is not None:
+                os.remove(str(subs_path))
+
             
 
         if num_videos_uploaded >= max_n_uploads:
