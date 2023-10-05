@@ -6,7 +6,11 @@ import time
 import glob
 import argparse
 import json
+from typing import Any, Dict
+import urllib.request
 from datetime import datetime
+from core.auth import Authentication
+from core.pmu_helper import PmuHelper
 
 from core.yt_helper import YouTubeHelper
 from core.google_sheets import GoogleSheets
@@ -234,52 +238,29 @@ def populate_ffpl_sheet(args : argparse.Namespace):
     num_added = 0
 
     #add playlists rows for combined events
-    src_id : str = "associated"
-    ev_title = "Associated Events"
-    item = {}
-    item["FF P Source ID"] = src_id
-    item["FF P ID"] = ""
-    item["FF P Title"] = f"{ev_title} - Fast Forwards | {args.venue}"
-    item["FF P Description"] = f"Fast forwards for event '{ev_title}' at {args.venue}"
-    if not src_id in playlists.data_by_index:
-        playlists.data.append(item)
-        playlists.data_by_index[src_id] = item
-        num_added += 1
+    combined = [ [ "associated", "Associated Events" ], [ "workshop", "Workshops"], [ "tutorial", "Tutorials"] ]
+    for src_id, ev_title in combined:        
+        item = {}
+        item["FF P Source ID"] = src_id
+        item["FF P ID"] = ""
+        item["FF P Title"] = f"{ev_title} - Fast Forwards | {args.venue}"
+        item["FF P Description"] = f"Fast forwards for {ev_title.lower()} at {args.venue}"
+        if not src_id in playlists.data_by_index:
+            playlists.data.append(item)
+            playlists.data_by_index[src_id] = item
+            num_added += 1
 
-    src_id = "workshop"
-    ev_title = "Workshops"
-    item = {}
-    item["FF P Source ID"] = src_id
-    item["FF P ID"] = ""
-    item["FF P Title"] = f"{ev_title} - Fast Forwards | {args.venue}"
-    item["FF P Description"] = f"Fast forwards for event '{ev_title}' at {args.venue}"
-    if not src_id in playlists.data_by_index:
-        playlists.data.append(item)
-        playlists.data_by_index[src_id] = item
-        num_added += 1
-
-    src_id = "tutorial"
-    ev_title = "Tutorials"
-    item = {}
-    item["FF P Source ID"] = src_id
-    item["FF P ID"] = ""
-    item["FF P Title"] = f"{ev_title} - Fast Forwards | {args.venue}"
-    item["FF P Description"] = f"Fast forwards for event '{ev_title}' at {args.venue}"
-    if not src_id in playlists.data_by_index:
-        playlists.data.append(item)
-        playlists.data_by_index[src_id] = item
-        num_added += 1
 
     #add playlist rows for each event
     for ev in events.data:
         src_id : str = ev["Event Prefix"]
         if src_id in playlists.data_by_index:
             continue
-        if not src_id.startswith("v-"):
+        if args.only_v and not src_id.startswith("v-"):
             continue
         ev_title = ev["Event"]
         title = f"{ev_title} - Fast Forwards | {args.venue}"
-        desc = f"Fast forwards for event '{ev_title}' at {args.venue}"
+        desc = f"Fast forwards for {ev_title} at {args.venue}"
         item = {}
         item["FF P Source ID"] = src_id
         item["FF P ID"] = ""
@@ -290,24 +271,26 @@ def populate_ffpl_sheet(args : argparse.Namespace):
         num_added += 1
 
     #add playlist rows for each session
-    for s in sessions.data:
-        src_id = s["Session ID"]
-        if src_id in playlists.data_by_index:
-            continue
-        if s["Track"] == "various":
-            continue #not livestreamed
-        s_title = s["Session Title"]
-        title = f"{s_title} - Fast Forwards | {args.venue}"        
-        desc = f"Fast forwards for session '{s_title}' at {args.venue}"
-        item = {}
-        item["FF P Source ID"] = src_id
-        item["FF P ID"] = ""
-        item["FF P Title"] = title
-        item["FF P Description"] = desc
-        #for now ignore sessions, too many playlists
-        #playlists.data.append(item)
-        #playlists.data_by_index[src_id] = item
-        #num_added += 1
+    
+    if args.create_session_playlists:
+        for s in sessions.data:
+            src_id = s["Session ID"]
+            if src_id in playlists.data_by_index:
+                continue
+            if s["Track"] == "various":
+                continue #not livestreamed
+            s_title = s["Session Title"]
+            title = f"{s_title} - Fast Forwards | {args.venue}"        
+            desc = f"Fast forwards for session '{s_title}' at {args.venue}"
+            item = {}
+            item["FF P Source ID"] = src_id
+            item["FF P ID"] = ""
+            item["FF P Title"] = title
+            item["FF P Description"] = desc
+            
+            playlists.data.append(item)
+            playlists.data_by_index[src_id] = item
+            num_added += 1
 
     playlists.save()
     print(f"{num_added} playlist rows added.")
@@ -324,14 +307,30 @@ def populate_pl_sheet(args : argparse.Namespace):
 
     num_added = 0
 
+    #add playlists rows for combined events
+    combined = [ [ "associated", "Associated Events" ], [ "workshop", "Workshops"], [ "tutorial", "Tutorials"] ]
+    for src_id, ev_title in combined:        
+        item = {}
+        item["P Source ID"] = src_id
+        item["P ID"] = ""
+        item["P Title"] = f"{ev_title} - Presentations | {args.venue}"
+        item["P Description"] = f"Pre-recorded presentations for {ev_title.lower()} at {args.venue}"
+        if not src_id in playlists.data_by_index:
+            playlists.data.append(item)
+            playlists.data_by_index[src_id] = item
+            num_added += 1
+
+
     #add playlist rows for each event
     for ev in events.data:
         src_id = ev["Event Prefix"]
         if src_id in playlists.data_by_index:
             continue
+        if args.only_v and not src_id.startswith("v-"):
+            continue
         ev_title = ev["Event"]
         title = f"{ev_title} - Presentations | {args.venue}"
-        desc = f"Pre-recorded presentations for event '{ev_title}' at {args.venue}"
+        desc = f"Pre-recorded presentations for {ev_title} at {args.venue}"
         item = {}
         item["P Source ID"] = src_id
         item["P ID"] = ""
@@ -341,25 +340,26 @@ def populate_pl_sheet(args : argparse.Namespace):
         playlists.data_by_index[src_id] = item
         num_added += 1
 
-    #add playlist rows for each session
-    for s in sessions.data:
-        src_id = s["Session ID"]
-        if src_id in playlists.data_by_index:
-            continue
-        if s["Track"] == "various":
-            continue #not livestreamed
+    if args.create_session_playlists:
+        #add playlist rows for each session
+        for s in sessions.data:
+            src_id = s["Session ID"]
+            if src_id in playlists.data_by_index:
+                continue
+            if s["Track"] == "various":
+                continue #not livestreamed
 
-        s_title = s["Session Title"]
-        title = f"{s_title} - Presentations | {args.venue}"        
-        desc = f"Pre-recorded presentations for session '{s_title}' at {args.venue}"
-        item = {}
-        item["P Source ID"] = src_id
-        item["P ID"] = ""
-        item["P Title"] = title
-        item["P Description"] = desc
-        playlists.data.append(item)
-        playlists.data_by_index[src_id] = item
-        num_added += 1
+            s_title = s["Session Title"]
+            title = f"{s_title} - Presentations | {args.venue}"        
+            desc = f"Pre-recorded presentations for session '{s_title}' at {args.venue}"
+            item = {}
+            item["P Source ID"] = src_id
+            item["P ID"] = ""
+            item["P Title"] = title
+            item["P Description"] = desc
+            playlists.data.append(item)
+            playlists.data_by_index[src_id] = item
+            num_added += 1
 
     playlists.save()
     print(f"{num_added} playlist rows added.")
@@ -443,6 +443,8 @@ def upload_ff_videos(yt : YouTubeHelper, args : argparse.Namespace):
     if args.max_n_uploads and args.max_n_uploads < max_n_uploads:
         max_n_uploads = args.max_n_uploads
     for row in videos.data:
+        if row["Ready"] != "1":
+            continue
         ex_id = row["FF Video ID"]
         captions_uploaded = row["Subtitles Uploaded"] == "y"
         if ex_id and len(ex_id) > 0 and captions_uploaded:
@@ -531,18 +533,24 @@ def upload_videos(yt : YouTubeHelper, args : argparse.Namespace):
     #path = Path(args.path)    
     #channel_id = args.channel_id
     #uploads_p_id = "UU" + channel_id[2:]
-
+    if args.path is None or len(args.path) == 0:
+        print("--path has to be provided")
+        return
+    
     playlists = GoogleSheets()
     playlists.load_sheet("Playlists")
     videos = GoogleSheets()
     videos.load_sheet("Videos")
     num_playlists_created = 0
     num_videos_uploaded = 0
+    pmu : PmuHelper = None
 
     max_n_uploads = 100
     if args.max_n_uploads and args.max_n_uploads < max_n_uploads:
         max_n_uploads = args.max_n_uploads
     for row in videos.data:
+        if row["Ready"] != "1":
+            continue
         ex_id = row["Video ID"]
         captions_uploaded = row["Subtitles Uploaded"] == "y"
         if ex_id and len(ex_id) > 0 and captions_uploaded:
@@ -550,9 +558,24 @@ def upload_videos(yt : YouTubeHelper, args : argparse.Namespace):
 
         src_id = row["Video Source ID"]
         print(f"\r\nprocessing {src_id}")
-        video_path = find_file(args.path, row["Video File Name"])
-        subs_path = find_file(args.path, row["Video Subtitles File Name"])
-        thumb_path = find_file(args.path, row["Video Thumbnail File Name"])
+
+        vfn = row["Video File Name"]
+        is_pmu = False
+        video_path : str = None
+        subs_path : str = None
+        thumb_path : str = None
+        if vfn == ":pmu:":
+            is_pmu = True
+            if pmu is None:
+                pmu = PmuHelper()
+            p1, p2 = pmu.download_presentation_video(src_id, args.path)
+            video_path = Path(p1)
+            subs_path = Path(p2) if p2 is not None else None
+        else:
+            video_path = find_file(args.path, vfn)
+            subs_path = find_file(args.path, row["Video Subtitles File Name"])
+            thumb_path = find_file(args.path, row["Video Thumbnail File Name"])
+
         if not video_path:
             print(f"ERROR: video not found: {video_path}")
             continue
@@ -624,6 +647,14 @@ def upload_videos(yt : YouTubeHelper, args : argparse.Namespace):
                     print(f"\r\nsaving videos.csv failed: {str(ex)}")
             except BaseException as e:
                 print(f"error occurred while uploading subtitles:\r\n{str(e)}")
+
+        if is_pmu:
+            #delete temp download files       
+            print("\r\ndeleting temp files...")     
+            os.remove(str(video_path))
+            if subs_path is not None:
+                os.remove(str(subs_path))
+
             
 
         if num_videos_uploaded >= max_n_uploads:
@@ -646,11 +677,9 @@ def populate_videos(args : argparse.Namespace):
     ff_videos = GoogleSheets()
     ff_videos.load_sheet("FFVideos" if is_ff else "Videos")
     items1 = GoogleSheets()
-    items1.load_sheet("ItemsVISPapers-A")
+    items1.load_sheet("ItemsVIS-A")    
     items2 = GoogleSheets()
-    items2.load_sheet("ItemsVISSpecial")
-    items3 = GoogleSheets()
-    items3.load_sheet("ItemsEXT")
+    items2.load_sheet("ItemsEXT")
     events = GoogleSheets()
     events.load_sheet("Events")
     
@@ -669,6 +698,29 @@ def populate_videos(args : argparse.Namespace):
         uid = pure_name[:id_idx]
         if uid in ff_videos.data_by_index:
             continue #already present
+        if args.prefix is not None and len(args.prefix) > 0 and not uid.startswith(args.prefix):
+            continue #skip if prefix is specified and does not match
+
+        subs_fn = ""
+        thumb_fn = ""
+        prefix = os.path.join(cur_dir, pure_name)
+        if os.path.isfile(prefix + ".srt"):
+            subs_fn = pure_name + ".srt"
+        elif os.path.isfile(prefix + ".sbv"):
+            subs_fn = pure_name + ".sbv"
+        else:
+            #we might have slightly different naming for subtitles:
+            #subs_p = find_file_by_uid(cur_dir, item_uid, ".srt")
+            #if not subs_p:
+            #    subs_p = find_file_by_uid(cur_dir, item_uid, ".sbv")
+            #if subs_p:
+            #    subs_fn = str(subs_p)
+            print(f"WARNING: {pure_name} does not have a subtitles file!")
+
+        if os.path.isfile(prefix + ".png"):
+            thumb_fn = pure_name + ".png"
+        elif os.path.isfile(prefix + ".jpg"):
+            thumb_fn = pure_name + ".jpg"
 
         session_id = ""
         ref_playlists = []
@@ -713,8 +765,6 @@ def populate_videos(args : argparse.Namespace):
                 items_by_index = items1.data_by_index
             elif item_uid in items2.data_by_index:
                 items_by_index = items2.data_by_index
-            elif item_uid in items3.data_by_index:
-                items_by_index = items3.data_by_index
 
             if items_by_index:
                 session_id = items_by_index[item_uid]["Session ID"]
@@ -735,33 +785,14 @@ def populate_videos(args : argparse.Namespace):
             if event in playlists.data_by_index:
                 ref_playlists.append(event)
 
-            if event.startswith("a-") and "associated" in playlists.data_by_index:
+            if (event.startswith("a-") or event.startswith("s-")) and "associated" in playlists.data_by_index:
                 ref_playlists.append("associated")
             elif event.startswith("w-") and "workshop" in playlists.data_by_index:
                 ref_playlists.append("workshop")
             elif event.startswith("t-") and "tutorial" in playlists.data_by_index:
                 ref_playlists.append("tutorial")
 
-        subs_fn = ""
-        thumb_fn = ""
-        prefix = os.path.join(cur_dir, pure_name)
-        if os.path.isfile(prefix + ".srt"):
-            subs_fn = pure_name + ".srt"
-        elif os.path.isfile(prefix + ".sbv"):
-            subs_fn = pure_name + ".sbv"
-        else:
-            #we might have slightly different naming for subtitles:
-            #subs_p = find_file_by_uid(cur_dir, item_uid, ".srt")
-            #if not subs_p:
-            #    subs_p = find_file_by_uid(cur_dir, item_uid, ".sbv")
-            #if subs_p:
-            #    subs_fn = str(subs_p)
-            print(f"WARNING: {pure_name} does not have a subtitles file!")
-
-        if os.path.isfile(prefix + ".png"):
-            thumb_fn = pure_name + ".png"
-        elif os.path.isfile(prefix + ".jpg"):
-            thumb_fn = pure_name + ".jpg"
+        
         if is_ff:
             ffvideo = {          
                 "FF Source ID" : uid,
@@ -772,6 +803,7 @@ def populate_videos(args : argparse.Namespace):
                 "FF Description" : desc,
                 "Session ID" : session_id,
                 "Slot DateTime Start": start_time,
+                "Ready": "0",
                 "FF Playlists" : "|".join(ref_playlists),
                 "FF Video ID" : "",
                 "FF Link" : "",
@@ -788,6 +820,7 @@ def populate_videos(args : argparse.Namespace):
                 "Video Description" : desc,
                 "Session ID" : session_id,
                 "Slot DateTime Start": start_time,
+                "Ready": "0",
                 "Playlists" : "|".join(ref_playlists),
                 "Video ID" : "",
                 "Video Link" : "",
@@ -804,6 +837,129 @@ def populate_videos(args : argparse.Namespace):
     ff_videos.save()
     print(f"{num_added} rows added.")
 
+
+def populate_videos_papersdb(args : argparse.Namespace):
+    """populate FFVideos or Videos sheet based on PapersDB sheet and PMU system
+    """
+    
+    pmu = PmuHelper()
+    is_ff : bool = args.populate_ff_videos
+    playlists = GoogleSheets()
+    playlists.load_sheet("FFPlaylists" if is_ff else "Playlists")
+    papers = GoogleSheets()
+    papers.load_sheet("PapersDB")
+    sessions = GoogleSheets()
+    sessions.load_sheet("Sessions")
+    ff_videos = GoogleSheets()
+    ff_videos.load_sheet("FFVideos" if is_ff else "Videos")
+    items1 = GoogleSheets()
+    items1.load_sheet("ItemsVIS-A")    
+    items2 = GoogleSheets()
+    items2.load_sheet("ItemsEXT")
+    events = GoogleSheets()
+    events.load_sheet("Events")
+    
+    num_added = 0
+    to_add = []
+    for paper in papers.data:
+        uid : str = paper["UID"]
+        if uid in ff_videos.data_by_index:
+            continue #already present
+        if args.prefix is not None and len(args.prefix) > 0 and not uid.startswith(args.prefix):
+            continue #skip if prefix is specified and does not match
+
+        print(uid)
+        
+        video_url, subs_url = pmu.get_video_urls(uid)
+        if video_url is None or len(video_url) == 0:
+            print(f"WARNING: could not find PMU video for {uid}")
+            continue
+        if subs_url == "":
+            subs_url = None
+
+                
+        fn = ":pmu:"
+
+        session_id = ""
+        ref_playlists = []
+        start_time = ""
+        title = ""
+        desc = ""
+
+    
+        items_by_index = None
+        if uid in items1.data_by_index:
+            items_by_index = items1.data_by_index
+        elif uid in items2.data_by_index:
+            items_by_index = items2.data_by_index
+
+        if items_by_index:
+            session_id = items_by_index[uid]["Session ID"]
+            start_time = items_by_index[uid]["Slot DateTime Start"]
+            
+        event_title = paper["Event"]
+        event = paper["Event Prefix"]
+        paper_title = paper["Title"]
+        authors :str = paper["Authors"]
+        if authors and len(authors) > 0:
+            authors = authors.replace("|", ", ")
+        title = f"{paper_title} - Fast Forward | {args.venue}" if is_ff else f"{paper_title} | {args.venue}"
+        desc = f"{event_title} Fast Forward: {paper_title}\r\nAuthors: {authors}" if is_ff else f"{event_title}: {paper_title}\r\nAuthors: {authors}"
+
+        if event and len(event) > 0:
+            if event in playlists.data_by_index:
+                ref_playlists.append(event)
+
+            if (event.startswith("a-") or event.startswith("s-")) and "associated" in playlists.data_by_index:
+                ref_playlists.append("associated")
+            elif event.startswith("w-") and "workshop" in playlists.data_by_index:
+                ref_playlists.append("workshop")
+            elif event.startswith("t-") and "tutorial" in playlists.data_by_index:
+                ref_playlists.append("tutorial")
+
+        
+        if is_ff:
+            ffvideo = {          
+                "FF Source ID" : uid,
+                "FF File Name" : fn,
+                "FF Subtitles File Name" : fn if subs_url is not None else "",
+                "FF Thumbnail File Name" : "",
+                "FF Title" : title,
+                "FF Description" : desc,
+                "Session ID" : session_id,
+                "Slot DateTime Start": start_time,
+                "Ready": "0",
+                "FF Playlists" : "|".join(ref_playlists),
+                "FF Video ID" : "",
+                "FF Link" : "",
+                "Subtitles Uploaded" : ""
+                }
+            to_add.append(ffvideo)
+        else:
+            video = {          
+                "Video Source ID" : uid,
+                "Video File Name" : fn,
+                "Video Subtitles File Name" : fn if subs_url is not None else "",
+                "Video Thumbnail File Name" : "",
+                "Video Title" : title,
+                "Video Description" : desc,
+                "Session ID" : session_id,
+                "Slot DateTime Start": start_time,
+                "Ready": "0",
+                "Playlists" : "|".join(ref_playlists),
+                "Video ID" : "",
+                "Video Link" : "",
+                "Subtitles Uploaded" : ""
+                }
+            to_add.append(video)
+        num_added += 1
+    #important to add videos in correct order to playlist based on their scheduled time
+    uid_col_name = "FF Source ID" if is_ff else "Video Source ID"
+    for it in to_add:        
+        ff_videos.data.append(it)
+        ff_videos.data_by_index[it[uid_col_name]] = it
+    ff_videos.save()
+    print(f"{num_added} rows added.")
 
 if __name__ == '__main__':
     
@@ -881,7 +1037,10 @@ if __name__ == '__main__':
                         action='store_true', default=False)
     parser.add_argument('--populate_videos', help='populate videos sheet based on files in specified folder',
                         action='store_true', default=False)
+    parser.add_argument('--populate_videos_pmu', help='populate videos sheet based on PapersDB and PMU items',
+                        action='store_true', default=False)
     
+    parser.add_argument('--prefix', help='fitler by prefix of uid', default=None)
     parser.add_argument('--id', help='id of item (e.g., video)', default=None)
     parser.add_argument('--channel_id', help='id of channel', default=None)
     parser.add_argument('--stream_key', help='id of stream key', default=None)
@@ -890,14 +1049,22 @@ if __name__ == '__main__':
     parser.add_argument('--start_time', help='start time of scheduled broadcast in the "%Y-%m-%d %H:%M" format in your local time zone', default=None)
     parser.add_argument('--path', help='path to file or directory that should be uploaded, e.g. video file', default=None)
     parser.add_argument('--dow', help='day of week for scheduling broadcasts', default=None)
-    parser.add_argument('--venue', help='venue title for titles, descriptions', default="VIS 2022")
+    parser.add_argument('--venue', help='venue title for titles, descriptions', default="VIS 2023")
     parser.add_argument('--max_n_uploads', help='maximum number of video uploads', default=10, type=int)
+    parser.add_argument('--create_session_playlists', help='when populating video playlists also create playlists for sessions',
+                        action='store_true', default=False)
+    parser.add_argument('--only_v', help='when populating playlists only create playlists for events starting with v-',
+                        action='store_true', default=True)
+    
+    parser.add_argument('--no_auth', help='do not instantiate YouTubeHelper with authentication',
+                        action='store_true', default=False)
+    
 
 
     
     args = parser.parse_args()
 
-    yt = YouTubeHelper()
+    yt = None if args.no_auth else YouTubeHelper()
 
     if args.playlists:
         playlists = yt.get_all_playlists()
@@ -975,6 +1142,8 @@ if __name__ == '__main__':
         populate_videos(args)
     elif args.populate_videos:
         populate_videos(args)
+    elif args.populate_videos_pmu:
+        populate_videos_papersdb(args)
     elif args.upload_ff_videos:
         upload_ff_videos(yt, args)
     elif args.upload_videos:
