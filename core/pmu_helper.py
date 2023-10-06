@@ -55,34 +55,14 @@ class PmuHelper:
             raise RuntimeError("no video url found for uid " + uid)
         
         print("downloading video " + video_url)
-        video_path = os.path.join(target_path, pmu_video["filename"])
+        video_path = os.path.join(target_path, pmu_video["fileName"])
         urllib.request.urlretrieve(video_url, video_path)
 
         subs_path = None
         if subs_url is not None and len(subs_url) > 0:
             print("downloading subtitles " + subs_url)
-            subs_path = os.path.join(target_path, pmu_subs["filename"])
+            subs_path = os.path.join(target_path, pmu_subs["fileName"])
             urllib.request.urlretrieve(subs_url, subs_path)
 
         return (video_path, subs_path)
 
-
-    def save(self, target_fn : str = None):
-        """Saves sheet to .csv file. Target path is './tmp/<sheet name>.csv' if none is specified. Overwrites existing file.
-        """
-        if not self.sheet_name or len(self.sheet_name) == 0:
-            raise RuntimeError("no sheet loaded that could be saved")
-        if not target_fn:
-            if not os.path.exists("./tmp"):
-                os.mkdir("./tmp")
-            target_fn = "./tmp/" + self.sheet_name + ".csv"
-        temp_fn = target_fn + str(uuid.uuid4())
-        with open(temp_fn, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, self.fieldnames)
-            writer.writeheader()
-            writer.writerows(self.data)
-        try:
-            os.replace(temp_fn, target_fn)
-        except PermissionError:
-            time.sleep(5)
-            os.replace(temp_fn, target_fn)
