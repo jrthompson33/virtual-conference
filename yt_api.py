@@ -582,7 +582,7 @@ def upload_videos(yt : YouTubeHelper, args : argparse.Namespace):
 
         if not ex_id or len(ex_id) == 0:
             #upload video
-            print(f"\r\nuploading video {video_path}")
+            print(f"\r\nuploading video {video_path} (#upload {num_videos_uploaded + 1})")
             v_res = yt.upload_video(str(video_path), row["Video Title"], row["Video Description"])
             print(json.dumps(v_res))
             video_id = v_res["id"]
@@ -861,13 +861,23 @@ def populate_videos_papersdb(args : argparse.Namespace):
     
     num_added = 0
     to_add = []
+    
+    subs_col = "FF Subtitles File Name" if is_ff else "Video Subtitles File Name"
     for paper in papers.data:
         uid : str = paper["UID"]
-        if uid in ff_videos.data_by_index:
-            continue #already present
         if args.prefix is not None and len(args.prefix) > 0 and not uid.startswith(args.prefix):
             continue #skip if prefix is specified and does not match
 
+        if uid in ff_videos.data_by_index:
+            ex = ff_videos.data_by_index[uid]
+            if ex[subs_col] != ":pmu:":
+                #check whether we now have subtitles file
+                _, subs_url = pmu.get_video_urls(uid)
+                if subs_url is not None and len(subs_url) > 0:
+                    ex[subs_col] = ":pmu:"
+                    print(f"updated {uid} to have PMU subtitles")
+            continue #already present
+        
         print(uid)
         
         video_url, subs_url = pmu.get_video_urls(uid)
