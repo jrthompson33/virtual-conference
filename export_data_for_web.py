@@ -4,15 +4,15 @@ import os
 import json
 from threading import local
 import ics
-#from PIL import Image
+# from PIL import Image
 from datetime import timezone, datetime, timedelta
 import argparse
 
 from core.auth import Authentication
 from core.google_sheets import GoogleSheets
 
-# OKC is in GMT-5, Central Daylight Time
-conf_tz = timezone(-timedelta(hours=5))
+# Melbourne is in GMT+11, AEDT
+conf_tz = timezone(timedelta(hours=11))
 
 
 def parse_time(t: str):
@@ -33,16 +33,16 @@ def format_time_iso8601_utc(t: datetime):
 
 def format_time_local(t: datetime):
     localt = t.replace(tzinfo=timezone.utc).astimezone(tz=conf_tz)
-    return localt.strftime("%a %b %d %H:%M CDT")
+    return localt.strftime("%a %b %d %H:%M AEDT")
 
 
 def make_description_for_session(session_title: str, session_id: str, session_room: str, start_time: datetime, end_time: datetime):
-    text = session_title + " [VIS 2022] \n\n"
+    text = session_title + " [VIS 2023] \n\n"
     # if self.timeslot_entry(0, "Event URL").value:
     #     text += "\nEvent Webpage: {}".format(self.timeslot_entry(0, "Event URL").value)
 
     # NOTE: You'll want to replace this with the link to your conference session page
-    text += f"Session Webpage: https://virtual.ieeevis.org/year/2022/session_{session_id}.html \n"
+    text += f"Session Webpage: https://virtual.ieeevis.org/year/2023/session_{session_id}.html \n"
 
     text += f"Session Room: {session_room} \n\n"
 
@@ -60,9 +60,6 @@ def make_description_for_session(session_title: str, session_id: str, session_ro
 
 
 def make_calendar_for_session(session_title: str, session_id: str, session_room: str, start_time: datetime, end_time: datetime) -> ics.Calendar:
-    print(session_id)
-    print(start_time)
-    print(end_time)
     calendar = ics.Calendar()
     event = ics.Event()
     event.begin = start_time
@@ -70,7 +67,7 @@ def make_calendar_for_session(session_title: str, session_id: str, session_room:
     # if with_setup_time:
     #     event.begin -= self.setup_time()
     event.end = end_time
-    event.name = session_title + " [VIS 2022]"
+    event.name = session_title + " [VIS 2023]"
     event.location = session_room
 
     event.description = ""
@@ -114,16 +111,19 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
     sheet_sessions.load_sheet("Sessions")
 
     sheet_papers = GoogleSheets()
-    sheet_papers.load_sheet("ItemsVISPapers-A")
+    sheet_papers.load_sheet("ItemsVIS-A")
 
     sheet_ext = GoogleSheets()
     sheet_ext.load_sheet("ItemsEXT")
 
-    sheet_ff = GoogleSheets()
-    sheet_ff.load_sheet("FFVideos")
+    sheet_ff_playlists = GoogleSheets()
+    sheet_ff_playlists.load_sheet("FFPlaylists")
 
-    sheet_videos = GoogleSheets()
-    sheet_videos.load_sheet("Videos")
+    sheet_ff_videos = GoogleSheets()
+    sheet_ff_videos.load_sheet("FFVideos")
+
+    sheet_pre_videos = GoogleSheets()
+    sheet_pre_videos.load_sheet("Videos")
 
     sheet_posters = GoogleSheets()
     sheet_posters.load_sheet("Posters")
@@ -132,34 +132,29 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
     sheet_db_papers = GoogleSheets()
     sheet_db_papers.load_sheet("PapersDB")
 
+    # All tracks/rooms of the conference, create dict based on "Track"
+    sheet_tracks = GoogleSheets()
+    sheet_tracks.load_sheet("Tracks")
+
     db_papers_dict = dict()
     for db_p in sheet_db_papers.data:
         db_papers_dict[db_p["UID"]] = db_p
 
-    ff_dict = dict()
-    for ff in sheet_ff.data:
-        ff_dict[ff["FF Source ID"]] = ff
+    ff_videos_dict = dict()
+    for ff in sheet_ff_videos.data:
+        ff_videos_dict[ff["FF Source ID"]] = ff
 
-    # All tracks/rooms of the conference, create dict based on "Track"
-    sheet_tracks = GoogleSheets()
-    sheet_tracks.load_sheet("Tracks")
+    ff_playlists_dict = dict()
+    for ff in sheet_ff_playlists.data:
+        ff_playlists_dict[ff["FF P Source ID"]] = ff
+
+    pre_videos_dict = dict()
+    for v in sheet_pre_videos.data:
+        pre_videos_dict[v["Video Source ID"]] = v
+
     tracks_dict = dict()
     for t in sheet_tracks.data:
         tracks_dict[t["Track"]] = t
-
-    # All broadcasts of the conference, create dict based on "Livestream ID"
-    sheet_broadcasts = GoogleSheets()
-    sheet_broadcasts.load_sheet("Broadcasts")
-    broadcasts_dict = dict()
-    for b in sheet_broadcasts.data:
-        broadcasts_dict[b["Livestream ID"]] = b
-
-    sheet_recordings = GoogleSheets()
-    sheet_recordings.load_sheet("Recordings")
-    recordings_dict = sheet_recordings.data_by_index
-
-    # ['Event', 'Event Type', 'Event Prefix', 'Event Description',
-    #  'Event URL', 'Organizers', 'Organizer Emails']
 
     for e in sheet_events.data:
         e_data = {
@@ -176,50 +171,34 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
         if not e_data["event_prefix"] in all_events:
             all_events[e_data["event_prefix"]] = e_data
         else:
-            all_events[e_data["event_prefix"]].append(e_data)
-
-    # ['Session ID', 'Event Prefix', 'Session Title', 'DateTime Start', 'DateTime End',
-    # 'Track', 'Livestream ID', 'Session Image', 'Session Chairs', 'Session Chairs EMails',
-    # 'Session YouTube URL', 'Session FF Playlist URL', 'Session FF URL', 'Slido URL', 'Discord Channel',
-    # 'Discord Channel ID', 'Discord URL', 'Zoom Meeting ID', 'Zoom Password', 'Zoom URL', 'Zoom Host Start URL']
-
-# Thumbnail File Name	Stream Key ID	Captions Enabled	Captions Ingestion URL	Video ID	YouTube URL	Stream Bound
+            print('Error, duplicate event_prefix')
+            print(e_data)
 
     # Create session data
     for s in sheet_sessions.data:
         sid = s["Session ID"]
         t = tracks_dict[s["Track"]] if s["Track"] in tracks_dict else None
-        b = broadcasts_dict[s["Livestream ID"]
-                            ] if s["Livestream ID"] in broadcasts_dict else None
-        yt_rec_link = recordings_dict[sid]["YouTube Link"].strip() if sid in recordings_dict else ""
-        yt_rec_id = ""
-        if yt_rec_link and len(yt_rec_link) > 32:
-            yt_rec_id = yt_rec_link[32:]
+
         s_data = {
             "title": s["Session Title"],
             "session_id": sid,
             "event_prefix": s["Event Prefix"],
             "track": s["Track"],
-            "livestream_id": s["Livestream ID"],
             "session_image": f'{s["Session ID"]}.png',
             "chair": [c.strip() for c in s["Session Chairs"].split("|")] if s["Session Chairs"] else [],
-            "organizers": [],
-            "time_start": format_time_iso8601_utc(parse_time(s["DateTime Start"])),
-            "time_end": format_time_iso8601_utc(parse_time(s["DateTime End"])),
+            # "organizers": [], does this need to be filled in?
+            "time_start": format_time_iso8601_utc(parse_time(s["DateTime Start"])) if "DateTime Start" in s and s["DateTime Start"] != "" else "",
+            "time_end": format_time_iso8601_utc(parse_time(s["DateTime End"])) if "DateTime End" in s and s["DateTime End"] != "" else "",
             "discord_category": "",
             "discord_channel": t["Discord Channel"] if t else "",
             "discord_channel_id": t["Discord Channel ID"] if t else "",
             "discord_link": t["Discord URL"] if t else "",
-            "slido_link": t["Slido URL"] if t else "",
-            "youtube_url": b["YouTube URL"] if b else "https://youtu.be/_evorVC17Yg",
-            "youtube_id": b["Video ID"] if b else "_evorVC17Yg",
-            "youtube_rec_url": yt_rec_link,
-            "youtube_rec_id": yt_rec_id,
-            "zoom_meeting": "",
-            "zoom_password": "",
-            "zoom_link": "",
-            "ff_link": s["Session FF URL"],
-            "ff_playlist": s["Session FF Playlist URL"],
+            # TODO should we create Zooms for some sessions? I think we need this for the CC
+            "zoom_private_meeting": "",
+            "zoom_private_password": "",
+            "zoom_private_link": "",
+            "zoom_broadcast_link": "",
+            "ff_link": s["Session FF URL"] if s else "",
             "time_slots": [],
         }
 
@@ -237,7 +216,6 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             with open(os.path.join(output_dir, "ics", s["Session ID"] + ".ics"), "w", encoding="utf8") as f:
                 f.write(calendar.serialize())
 
-        # TODO This only includes papers that are in a session, will need to look for non-overlapping cases
         filtered_papers = list(
             filter(lambda p: p["Session ID"] == s_data["session_id"], sheet_papers.data))
 
@@ -248,18 +226,20 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             # Find the corresponding entry by Paper UID in PapersDB
             uid = p["Paper UID"]
             p_db = db_papers_dict[uid] if uid in db_papers_dict else None
-            ff = ff_dict[uid] if uid in ff_dict else None
-            video = sheet_videos.data_by_index[uid] if uid in sheet_videos.data_by_index else None
+            ff = ff_videos_dict[uid] if uid in ff_videos_dict else None
+            pv = pre_videos_dict[uid] if uid in pre_videos_dict else None
 
             p_event_prefix = p_db["Event Prefix"] if p_db else ""
 
             paper_type = ""
-            if p_event_prefix.startswith("v-spotlight"):
+            if p_event_prefix.startswith("v-spotlights"):
                 paper_type = "spotlight"
-            elif p_event_prefix.startswith("v-panel"):
+            elif p_event_prefix.startswith("v-panels"):
                 paper_type = "panel"
             elif p_event_prefix.startswith("v-short"):
                 paper_type = "short"
+            elif p_event_prefix.startswith("s-vds"):
+                paper_type = "associated"
             elif p_event_prefix.startswith("v-"):
                 paper_type = "full"
             elif p_event_prefix.startswith("a-"):
@@ -272,51 +252,49 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             p_data = {
                 "slot_id": p["Item ID"],
                 "session_id": p["Session ID"],
-                "type": p["Slot Type"],
                 "title": p["Slot Title"],
                 "contributors": [c.strip() for c in p["Slot Contributors"].split("|")] if p["Slot Contributors"] else [],
-                "authors": [a.strip() for a in p["Authors"].split("|")] if p["Authors"] else [],
+                "authors": [a.strip() for a in p_db["Authors"].split("|")] if (p_db and "Authors" in p_db and p_db["Authors"]) else [],
                 "abstract": p_db["Abstract"] if p_db else "",
                 "uid": p["Paper UID"],
-                "file_name": p["File Name"],
-                "time_stamp": format_time_iso8601_utc(parse_time(p["Slot DateTime Start"])),
-                "time_start": format_time_iso8601_utc(parse_time(p["Slot DateTime Start"])),
-                "time_end": format_time_iso8601_utc(parse_time(p["Slot DateTime End"])),
-                # "youtube_video_id": p["YouTube Video"],
+                "time_stamp": format_time_iso8601_utc(parse_time(p["Slot DateTime Start"])) if (p and "Slot DateTime Start" in p and p["Slot DateTime Start"] != "") else "",
+                "time_start": format_time_iso8601_utc(parse_time(p["Slot DateTime Start"])) if (p and "Slot DateTime Start" in p and p["Slot DateTime Start"] != "") else "",
+                "time_end": format_time_iso8601_utc(parse_time(p["Slot DateTime End"])) if (p and "Slot DateTime End" in p and p["Slot DateTime End"] != "") else "",
                 "paper_type": paper_type,
                 "keywords": [k.strip() for k in p_db["Keywords"].split("|")] if p_db and p_db["Keywords"] else [],
-                "has_image": p_db["Has Image"] if p_db else False,
-                "has_video": p_db["Has Video"] if p_db else False,
-                "video_duration": p_db["Video Duration"] if p_db else "",
+                "doi": p_db["DOI"] if p_db else "",
+                "fno": p_db["FNO"] if p_db else "",
+                "has_image": p_db["Has Image"] == "1" if p_db else False,
+                "has_pdf": p_db["Has PDF"] == "1" if p_db else False,
                 "paper_award": p_db["Award"] if p_db else "",
                 "image_caption": p_db["Image Caption"] if p_db else "",
                 "external_paper_link": "",
-                "has_pdf": p_db["Has PDF"] == "1" if p_db else False,
-                "ff_link": ff["FF Link"] if ff else "",
-                "ff_id": ff["FF Video ID"] if ff else "",
-                "prerecorded_video_link": video["Video Link"] if video else "",
-                "prerecorded_video_id": video["Video ID"] if video else "",
-                "live_video_link": "",
-                "live_video_id": ""
+                # This comes from FFVideos Sheet
+                "youtube_ff_link": ff["FF Link"] if ff else "",
+                "youtube_ff_id": ff["FF Video ID"] if ff else "",
+                "bunny_ff_link": "",
+                "bunny_ff_id": "",
+                # This comes from Videos Sheet
+                "youtube_prerecorded_link": pv["Video Link"] if pv else "",
+                "youtube_prerecorded_id": pv["Video ID"] if pv else "",
+                "bunny_prerecorded_link": "",
+                "bunny_prerecorded_id": "",
             }
 
             s_data["time_slots"].append(p_data)
 
-            # All papers will have a UID
-            # Should this be filtered for only full, short, cga, tvcg?
-            if p_db and p_data and p_data["uid"] and not "Q+A" in p_data["type"] and not "Q + A" in p_data["type"]:
+            if p_db and p_data and p_data["uid"]:
                 all_papers[p_data["uid"]] = p_data
+            else:
+                print(
+                    f"MISSING: data for paper UID = {uid}. Items* {('Valid' if p else 'Missing')}. PapersDB is {('Valid' if p_db else 'Missing')}.")
 
         if s_data["event_prefix"] in all_events:
             all_events[s_data["event_prefix"]]["sessions"].append(s_data)
         else:
-            print("MISSING: event prefix of {} in all_events.".format(
-                s_data["event_prefix"]))
+            print(
+                f"MISSING: event prefix of {s_data['event_prefix']} in all_events.")
 
-    # ['UID', 'Event', 'Event Prefix', 'Title', 'Authors',
-    # 'Keywords', 'Abstract', 'Presenting Author (name)',
-    # 'Presenting Author (email)', 'ACM Author Affiliations', 'Award', 'PDF Link',
-    # 'Has Preview', 'Has Presentation']
     for p in sheet_posters.data:
         p_data = {
             "event": p["Event"],
@@ -326,17 +304,18 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             "discord_channel": "",
             "authors": [a.strip() for a in p["Authors"].split("|")] if p["Authors"] else [],
             "author_affiliations": [a.strip() for a in p["ACM Author Affiliations"].split(";")] if p["ACM Author Affiliations"] else [],
-            "presenting_author": p["Presenting Author (name)"],
+            "presenting_author_name": p["Presenting Author (name)"],
+            "presenting_author_email": p["Presenting Author (email)"],
             "abstract": p["Abstract"],
-            "has_summary_pdf": p["Has Summary PDF"],
-            "has_image": p["Has Image"],
-            "pdf_link": p["PDF Link"],
+            "has_summary_pdf": p["Has Summary PDF"] == "1" if p else False,
+            "has_poster_pdf": p["Has Poster PDF"] == "1" if p else False,
+            "has_image": p["Has Image"] == "1" if p else False,
         }
         if p_data["uid"]:
             all_posters[p_data["uid"]] = p_data
 
     if export_ics:
-        with open(os.path.join(output_dir, "ics", "VIS2022.ics"), "w", encoding="utf8") as f:
+        with open(os.path.join(output_dir, "ics", "VIS2023.ics"), "w", encoding="utf8") as f:
             f.write(full_calendar.serialize())
 
         for k, v in event_calendars.items():
