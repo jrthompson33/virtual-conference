@@ -691,11 +691,19 @@ def populate_videos(args : argparse.Namespace):
         cur_dir = str(fp.parent)
         pure_name = fp.name[:-4] #file name without extension .mp4
         print("pure: " + pure_name)
-        id_idx = pure_name.find("_")
-        if id_idx == -1:
-            print(f"ERROR: file does not begin with id: '{fp.name}'")
-            continue
-        uid = pure_name[:id_idx]
+        sep_idx = pure_name.find("-")
+        uid = ""
+        if sep_idx > 1:
+            uid = pure_name[:sep_idx]
+            if uid not in sessions.data_by_index:
+                uid = ""
+        if len(uid) == 0:
+            id_idx = pure_name.find("_")
+            if id_idx == -1:
+                print(f"ERROR: file does not begin with id: '{fp.name}'")
+                continue
+            uid = pure_name[:id_idx]
+
         if uid in ff_videos.data_by_index:
             continue #already present
         if args.prefix is not None and len(args.prefix) > 0 and not uid.startswith(args.prefix):
@@ -717,10 +725,16 @@ def populate_videos(args : argparse.Namespace):
             #    subs_fn = str(subs_p)
             print(f"WARNING: {pure_name} does not have a subtitles file!")
 
-        if os.path.isfile(prefix + ".png"):
-            thumb_fn = pure_name + ".png"
-        elif os.path.isfile(prefix + ".jpg"):
-            thumb_fn = pure_name + ".jpg"
+        if prefix.endswith("_cover"):
+            if os.path.isfile(prefix[:-6] + ".png"):
+                thumb_fn = pure_name[:-6] + ".png"
+            elif os.path.isfile(prefix[:-6] + ".jpg"):
+                thumb_fn = pure_name[:-6] + ".jpg"
+        else:
+            if os.path.isfile(prefix + ".png"):
+                thumb_fn = pure_name + ".png"
+            elif os.path.isfile(prefix + ".jpg"):
+                thumb_fn = pure_name + ".jpg"
 
         session_id = ""
         ref_playlists = []
@@ -758,7 +772,7 @@ def populate_videos(args : argparse.Namespace):
             session_videos_dict[uid] = 1
         else:
             paper = papers.data_by_index[uid]
-            item_uid = uid + "-pres"
+            item_uid = uid
             
             items_by_index = None
             if item_uid in items1.data_by_index:
@@ -803,7 +817,7 @@ def populate_videos(args : argparse.Namespace):
                 "FF Description" : desc,
                 "Session ID" : session_id,
                 "Slot DateTime Start": start_time,
-                "Ready": "0",
+                "FF Ready": "0",
                 "FF Playlists" : "|".join(ref_playlists),
                 "FF Video ID" : "",
                 "FF Link" : "",
