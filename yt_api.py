@@ -443,7 +443,7 @@ def upload_ff_videos(yt : YouTubeHelper, args : argparse.Namespace):
     if args.max_n_uploads and args.max_n_uploads < max_n_uploads:
         max_n_uploads = args.max_n_uploads
     for row in videos.data:
-        if row["Ready"] != "1":
+        if row["FF Ready"] != "1":
             continue
         ex_id = row["FF Video ID"]
         captions_uploaded = row["Subtitles Uploaded"] == "y"
