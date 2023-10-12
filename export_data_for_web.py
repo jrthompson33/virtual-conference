@@ -125,6 +125,9 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
     sheet_pre_videos = GoogleSheets()
     sheet_pre_videos.load_sheet("Videos")
 
+    sheet_bunny = GoogleSheets()
+    sheet_bunny.load_sheet("BunnyContent")
+
     sheet_posters = GoogleSheets()
     sheet_posters.load_sheet("Posters")
 
@@ -151,6 +154,10 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
     pre_videos_dict = dict()
     for v in sheet_pre_videos.data:
         pre_videos_dict[v["Video Source ID"]] = v
+
+    bunny_dict = dict()
+    for bc in sheet_bunny.data:
+        bunny_dict[bc["UID"]] = bc
 
     tracks_dict = dict()
     for t in sheet_tracks.data:
@@ -228,6 +235,7 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             p_db = db_papers_dict[uid] if uid in db_papers_dict else None
             ff = ff_videos_dict[uid] if uid in ff_videos_dict else None
             pv = pre_videos_dict[uid] if uid in pre_videos_dict else None
+            bc = bunny_dict[uid] if uid in bunny_dict else None
 
             p_event_prefix = p_db["Event Prefix"] if p_db else ""
 
@@ -272,13 +280,13 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
                 # This comes from FFVideos Sheet
                 "youtube_ff_link": ff["FF Link"] if ff else "",
                 "youtube_ff_id": ff["FF Video ID"] if ff else "",
-                "bunny_ff_link": "",
-                "bunny_ff_id": "",
+                "bunny_ff_link": bc["FF Video Bunny URL"] if bc else "",
+                "bunny_ff_subtitles": bc["FF Video Subtitles Bunny URL"] if bc else "",
                 # This comes from Videos Sheet
                 "youtube_prerecorded_link": pv["Video Link"] if pv else "",
                 "youtube_prerecorded_id": pv["Video ID"] if pv else "",
-                "bunny_prerecorded_link": "",
-                "bunny_prerecorded_id": "",
+                "bunny_prerecorded_link": bc["Video Bunny URL"] if bc else "",
+                "bunny_prerecorded_subtitles": bc["Video Subtitles Bunny URL"] if bc else "",
             }
 
             s_data["time_slots"].append(p_data)
