@@ -185,6 +185,7 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
     for s in sheet_sessions.data:
         sid = s["Session ID"]
         t = tracks_dict[s["Track"]] if s["Track"] in tracks_dict else None
+        s_ff = ff_videos_dict[sid] if sid in ff_videos_dict else None
 
         s_data = {
             "title": s["Session Title"],
@@ -205,7 +206,7 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             "zoom_private_password": "",
             "zoom_private_link": "",
             "zoom_broadcast_link": "",
-            "ff_link": s["Session FF URL"] if s else "",
+            "ff_link": s_ff["FF Link"] if s_ff is not None else (s["Session FF URL"] if s else ""),
             "time_slots": [],
         }
 
