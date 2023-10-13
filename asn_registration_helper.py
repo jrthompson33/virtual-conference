@@ -52,9 +52,9 @@ def get_attendees(auth: Authentication):
         "ID", "Email", "Title", "Name", "First Name", "Last Name",
         "Name Tag", "Gender", "Position", "Department", "Organisation",
         "Date Added", "Date Modified", "Checked", "Completed At", "Class Name",
-        "App Login Token Create Date", "Student", "Trade", "Bio",
+        "App Login Token Create Date", "Student", "Trade",
         "Head Shot File", "Dietary Requirements", "Special Requirements",
-        "App Login Token", "App Login Short URL"
+        "App Login Token", "App Login Short URL", "Item Name"
     ]
 
     # Read in the excel file using pandas
