@@ -33,7 +33,7 @@ def format_time_iso8601_utc(t: datetime):
 
 def format_time_local(t: datetime):
     localt = t.replace(tzinfo=timezone.utc).astimezone(tz=conf_tz)
-    return localt.strftime("%a %b %d %H:%M AEDT")
+    return localt.strftime("%a %b %d %I:%M %p AEDT (UTC+11)")
 
 
 def make_description_for_session(session_title: str, session_id: str, session_room: str, start_time: datetime, end_time: datetime):
@@ -47,8 +47,8 @@ def make_description_for_session(session_title: str, session_id: str, session_ro
     text += f"Session Room: {session_room} \n\n"
 
     # NOTE: include local time here as well
-    text += f"Session Start: {format_time_local(start_time)} ({format_time(start_time)}) \n" + \
-            f"Session End: {format_time_local(end_time)} ({format_time(end_time)})"
+    text += f"Session Start: {format_time_local(start_time)}\n" + \
+            f"Session End: {format_time_local(end_time)}"
 
     # if self.timeslot_entry(0, "Discord Link").value:
     #     text += "\nDiscord Link: " + self.timeslot_entry(0, "Discord Link").value
