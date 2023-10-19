@@ -38,6 +38,12 @@ def join_session_contributor_rows() -> List[dict]:
     sessions.load_sheet("Sessions")
     events = GoogleSheets()
     events.load_sheet("Events")
+    tracks = GoogleSheets()
+    tracks.load_sheet("Tracks")
+    tracks_dict = dict()
+    for t in tracks.data:
+        tracks_dict[t["Track"]] = t
+
     events_dict = {}
     for ev in events.data:
         prefix = ev["Event Prefix"]
@@ -45,6 +51,9 @@ def join_session_contributor_rows() -> List[dict]:
             events_dict[prefix] = ev
     data = sessions.data
     for s in data:
+        tr = s["Track"]
+        if tr is not None and tr in tracks_dict:
+            s.update(tracks_dict[tr])
         prefix = s["Event Prefix"]
         if not prefix or prefix not in events_dict:
             continue
@@ -61,16 +70,16 @@ def join_slot_contributors() -> List[dict]:
     for s in sessions:
         sessions_dict[s["Session ID"]] = s
     items1_sheet = GoogleSheets()
-    items1_sheet.load_sheet("ItemsVISPapers-A")
+    items1_sheet.load_sheet("ItemsVIS-A")
     items2_sheet = GoogleSheets()
     items2_sheet.load_sheet("ItemsEXT")
-    items3_sheet = GoogleSheets()
-    items3_sheet.load_sheet("ItemsVISSpecial")
+    #items3_sheet = GoogleSheets()
+    #items3_sheet.load_sheet("ItemsVISSpecial")
 
     items = []
     items.extend(items1_sheet.data)
     items.extend(items2_sheet.data)
-    items.extend(items3_sheet.data)
+    #items.extend(items3_sheet.data)
 
     items_by_session : dict[str, List[dict]] = {}
 
