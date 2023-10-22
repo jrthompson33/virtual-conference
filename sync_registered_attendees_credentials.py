@@ -75,7 +75,7 @@ def sync_attendees(auth: Authentication, vendor: Vendor):
         if vendor == Vendor.ASN:
             name = a['Name']
             email = a['Email']
-            isValid = a['Item Name'] == 'Organising Committee Full Conference Registration'
+            isValid = a['Item Name'] != 'Cancelled Registration - No Fee'
         elif vendor == Vendor.CVENT:
             name = a['FullName']
             email = a['Email']
@@ -128,19 +128,3 @@ if __name__ == '__main__':
         monitor_sync_attendees(auth, args.vendor)
     elif args.sync:
         sync_attendees(auth, args.vendor)
-
-
-# Things to do in this script
-
-# Get cvent list
-
-# Get list of currently on auth0
-
-# Loop through eventbrite list and see if already in auth0 list
-# If not create user with password, set user data email_sent false
-
-# Loop through cvent list and see if already in auth0
-# If not create user with password, set user data email_sent false
-
-# Wait some time, get the updated list from auth0 - this seems like a race condition?
-# Send emails for all the auth0 users that have `invite_email_sent` == False
