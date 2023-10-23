@@ -240,7 +240,7 @@ def get_new_eventbrite(session):
 def generate_password(email: str, secret: str) -> str:
     """generates password from email using hash with secret
     """
-    return hashlib.sha256((email + secret).encode('utf-8')).hexdigest()[:10]
+    return hashlib.sha256(((email.lower() if email is not None else "") + secret).encode('utf-8')).hexdigest()[:10]
 
 
 def get_all(transmit_to_auth0, session, logo_attachment, max_new=-1):
@@ -337,6 +337,8 @@ if __name__ == '__main__':
                         help='create user for testing purposes')
     parser.add_argument('--get_users', action="store_true",
                         help='retrieve all users and store them as a json file')
+    parser.add_argument('--get_password', action="store_true",
+                        help='print out password based on provided email and stored secret')
     # parser.add_argument('--mail', action="store_true", help='send email for new users')
     # parser.add_argument('--auth0', action="store_true", help='send new users to auh0')
     # parser.add_argument('--limit', default=-1, type=int, help='maximum number of new users for this run')
@@ -366,6 +368,10 @@ if __name__ == '__main__':
 
         with open(args.output, "w", newline='', encoding='utf-8') as f:
             f.write(users_json)
+    elif args.get_password:
+        auth = Authentication()
+        pw = generate_password(args.email, auth.auth0["password_secret"])
+        print(f"Password for {args.email.lower()}: {pw}")
 
     # else:
     #     session = auth.Authentication(email=args.mail, eventbrite_api=True, auth0_api=True)
