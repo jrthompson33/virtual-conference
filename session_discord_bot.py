@@ -27,7 +27,7 @@ for t in sheet_tracks.data:
     tracks_dict[t["Track"]] = t
 
     
-last_tick = datetime.now(timezone.utc) - timedelta(minutes=1.0)
+last_tick = datetime.now(timezone.utc) - timedelta(minutes=25.0)
 
 @client.event
 async def on_ready():
@@ -35,10 +35,14 @@ async def on_ready():
     global session_id_to_channel
     global general_channel
     for g in client.guilds:
+        print(g)
+        print(g.id)
         if g.id == auth.discord["discord_server_id"]:
             guild = g
             break
-    
+    if guild is None:
+        print("Guild not found")
+        return
     for ch in guild.text_channels:
         if ch.name == "general":
             general_channel = ch
@@ -59,6 +63,7 @@ async def on_ready():
         for ch in guild.text_channels:
             if ch.id == ch_id:
                 session_id_to_channel[sid] = ch
+                print(f"Found channel {ch.name} for session {sid}, start at {datetime.fromisoformat(s['DateTime Start'].replace('Z', '+00:00'))}")
                 break
 
 
@@ -76,7 +81,7 @@ async def post_session_info():
     global session_id_to_channel
     global sessions
     global last_tick
-    
+    #print("tick")
     if not guild:
         return
     dt = datetime.now(timezone.utc)
@@ -94,9 +99,9 @@ async def post_session_info():
             if len(track) == 0 or track == "various" or track == "none":
                 continue
             print(f"{dt} sending message")
-            await ch.send(content=f"The session **{title}** in this track is going to start in just a few minutes.\r\nCheck the session overview on our virtual website: https://virtual.ieeevis.org/year/2022/session_{sid}.html\r\nor watch the livestream at https://virtual.ieeevis.org/year/2022/room_{track}.html\r\nPlease use this channel for fruitful exchanges, but note that session chairs will not pick up questions on Discord for Q+A.")
+            await ch.send(content=f"The session **{title}** in this track is going to start in just a few minutes.\r\nCheck the session overview on our content website: https://content.ieeevis.org/year/2023/session_{sid}.html\r\nPlease use this channel for fruitful exchanges, but note that session chairs will not pick up questions on Discord for Q+A.")
     last_tick = dt
 
-asyncio.run(post_session_info())
-#post_session_info.start()
+#asyncio.run(post_session_info())
+post_session_info.start()
 client.run(auth.discord["bot_token"])
