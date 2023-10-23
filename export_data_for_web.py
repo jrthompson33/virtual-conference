@@ -258,11 +258,14 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             elif p_event_prefix.startswith("t-"):
                 paper_type = "tutorial"
 
+            # If presenter changed exists, then change contributors list
+            contributors = p["Slot Presenters Changed"] if p["Slot Presenters Changed"] else p["Slot Contributors"]
+
             p_data = {
                 "slot_id": p["Item ID"],
                 "session_id": p["Session ID"],
                 "title": p["Slot Title"],
-                "contributors": [c.strip() for c in p["Slot Contributors"].split("|")] if p["Slot Contributors"] else [],
+                "contributors": [c.strip() for c in contributors.split("|")] if contributors else [],
                 "authors": [a.strip() for a in p_db["Authors"].split("|")] if (p_db and "Authors" in p_db and p_db["Authors"]) else [],
                 "abstract": p_db["Abstract"] if p_db else "",
                 "uid": p["Paper UID"],
