@@ -37,12 +37,12 @@ def format_time_local(t: datetime):
 
 
 def make_description_for_session(session_title: str, session_id: str, session_room: str, start_time: datetime, end_time: datetime):
-    text = session_title + " [VIS 2023] \n\n"
+    text = session_title + " [VIS 2024] \n\n"
     # if self.timeslot_entry(0, "Event URL").value:
     #     text += "\nEvent Webpage: {}".format(self.timeslot_entry(0, "Event URL").value)
 
     # NOTE: You'll want to replace this with the link to your conference session page
-    text += f"Session Webpage: https://virtual.ieeevis.org/year/2023/session_{session_id}.html \n"
+    text += f"Session Webpage: https://virtual.ieeevis.org/year/2024/session_{session_id}.html \n"
 
     text += f"Session Room: {session_room} \n\n"
 
@@ -67,7 +67,7 @@ def make_calendar_for_session(session_title: str, session_id: str, session_room:
     # if with_setup_time:
     #     event.begin -= self.setup_time()
     event.end = end_time
-    event.name = session_title + " [VIS 2023]"
+    event.name = session_title + " [VIS 2024]"
     event.location = session_room
 
     event.description = ""
@@ -123,7 +123,7 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
     sheet_ff_videos.load_sheet("FFVideos")
 
     sheet_pre_videos = GoogleSheets()
-    sheet_pre_videos.load_sheet("Videos")
+    sheet_pre_videos.load_sheet("TalkVideos")
 
     sheet_bunny = GoogleSheets()
     sheet_bunny.load_sheet("BunnyContent")
@@ -327,7 +327,7 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             all_posters[p_data["uid"]] = p_data
 
     if export_ics:
-        with open(os.path.join(output_dir, "ics", "VIS2023.ics"), "w", encoding="utf8") as f:
+        with open(os.path.join(output_dir, "ics", "VIS2024.ics"), "w", encoding="utf8") as f:
             f.write(full_calendar.serialize())
 
         for k, v in event_calendars.items():
