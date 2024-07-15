@@ -3,31 +3,8 @@ import json
 import csv
 import os
 
-import core.auth as auth
-from core.google_sheets import GoogleSheets
-
-event_prefix_dict = {
-    "v-short": {
-        "title": "VIS Short Papers",
-        "type": "Short Paper Presentation",
-        "prefix": "v-short",
-    },
-    "v-full": {
-        "title": "VIS Full Papers",
-        "type": "Full Length Paper Presentation",
-        "prefix": "v-full",
-    },
-    "v-cga": {
-        "title": "CG&A Invited Presentations",
-        "type": "Full Length Paper Presentation",
-        "prefix": "v-cga",
-    },
-    "v-tvcg": {
-        "title": "TVCG Invited Presentations",
-        "type": "Full Length Paper Presentation",
-        "prefix": "v-tvcg",
-    }
-}
+# import core.auth as auth
+# from core.google_sheets import GoogleSheets
 
 
 def tidy_up_string(s: str):
@@ -66,15 +43,10 @@ def convert_pcs_data(event_prefix: str, pcs_path: str, output_path: str):
     """
     with open(pcs_path, "r", encoding="utf8") as pcs_file:
         pcs_data = json.load(pcs_file)
-        event_dict = event_prefix_dict[event_prefix]
 
         rows = []
         if 'subs' not in pcs_data:
             print("Error: PCS JSON data not in correct format. Missing 'subs' key.")
-            return False
-        elif not event_dict:
-            print(
-                f"Error: could not find event_prefix = {event_prefix} in list of events.")
             return False
         else:
             for p in pcs_data['subs']:
@@ -84,16 +56,15 @@ def convert_pcs_data(event_prefix: str, pcs_path: str, output_path: str):
                     a["affiliations"]) for a in p["authors"]])
                 emails = "|".join([a["author"]["email"]
                                    for a in p['authors']])
-                uid = id_to_uid(p["id"], event_dict["prefix"])
-                rows.append({"uid": uid, "event_title": event_dict["title"], "event_type": event_dict["type"],
-                             "event_prefix": "v-short", "title": tidy_up_string(p['title']), 'contributors': format_author_name(p['contact']),
+                uid = id_to_uid(p["id"], event_prefix)
+                rows.append({"uid": uid, "event_prefix": event_prefix, "title": tidy_up_string(p['title']), 'contributors': format_author_name(p['contact']),
                              "contributor_emails":  p['contact']['email'], 'authors': authors, 'author_affiliations': affiliations, "author_emails": emails,
                              "abstract": tidy_up_string(p['abstract'])})
 
             rows.sort(key=lambda r: r["uid"])
             with open(output_path, 'w', encoding='utf-8') as output_file:
                 writer = csv.DictWriter(output_file, fieldnames=[
-                                        "uid", "event_title", "event_type", "event_prefix", "title", "contributors", "contributor_emails", "authors", "author_affiliations", "author_emails", "abstract"])
+                                        "uid", "event_prefix", "title", "contributors", "contributor_emails", "authors", "author_affiliations", "author_emails", "abstract"])
                 writer.writeheader()
                 writer.writerows(rows)
                 return True
