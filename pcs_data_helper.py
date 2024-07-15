@@ -8,9 +8,9 @@ from core.google_sheets import GoogleSheets
 
 event_prefix_dict = {
     "v-short": {
-        "event": "VIS Short Papers",
-        "event_type": "Short Paper Presentation",
-        "event_prefix": "v-short",
+        "title": "VIS Short Papers",
+        "type": "Short Paper Presentation",
+        "prefix": "v-short",
     },
     "v-full": {
 
@@ -18,8 +18,8 @@ event_prefix_dict = {
 }
 
 
-def tidy_up_string(s):
-    return s.replace(r"[\n\r\t]", " ").strip()
+def tidy_up_string(s: str):
+    return " ".join(s.splitlines())
 
 
 def id_to_uid(id: str, event_prefix: str):
@@ -45,7 +45,7 @@ def format_author_affiliations(affiliations):
     """
     Format the affiliations of an author. Use a tab to separate multiple affiliations for one author.
     """
-    return "\t".join([format_affiliation(a) for a in affiliations])
+    return "&".join([format_affiliation(a) for a in affiliations])
 
 
 def convert_pcs_data(event_prefix: str, pcs_path: str, output_path: str):
@@ -54,29 +54,35 @@ def convert_pcs_data(event_prefix: str, pcs_path: str, output_path: str):
     """
     with open(pcs_path, "r", encoding="utf8") as pcs_file:
         pcs_data = json.load(pcs_file)
+        event_dict = event_prefix_dict[event_prefix]
 
         rows = []
-        if 'subs' in pcs_data:
+        if 'subs' not in pcs_data:
+            print("Error: PCS JSON data not in correct format. Missing 'subs' key.")
+            return False
+        elif not event_dict:
+            print(
+                f"Error: could not find event_prefix = {event_prefix} in list of events.")
+            return False
+        else:
             for p in pcs_data['subs']:
                 authors = "|".join([format_author_name(a["author"])
                                    for a in p['authors']])
                 affiliations = "|".join([format_author_affiliations(
                     a["affiliations"]) for a in p["authors"]])
-                rows.append({'id': id_to_uid(p['id']), 'event': 'VIS Short Papers', 'event_type': 'Short Paper Presentation',
+                uid = id_to_uid(p["id"], event_dict["prefix"])
+                rows.append({'uid': uid, 'event_title': event_dict["title"], 'event_type': event_dict["type"],
                              'event_prefix': 'v-short', 'title': tidy_up_string(p['title']), 'contributors': format_author_name(p['contact']),
                              'contributor_emails':  p['contact']['email'], 'authors': authors, 'author_affiliations': affiliations,
                              'abstract': tidy_up_string(p['abstract'])})
 
+            rows.sort(key=lambda r: r["uid"])
             with open(output_path, 'w', encoding='utf-8') as output_file:
                 writer = csv.DictWriter(output_file, fieldnames=[
-                                        "id", "event", "event_type", "event_prefix", "title", "contributors", "contributor_emails", "authors", "author_affiliations", "abstract"])
+                                        "uid", "event_title", "event_type", "event_prefix", "title", "contributors", "contributor_emails", "authors", "author_affiliations", "abstract"])
+                writer.writeheader()
                 writer.writerows(rows)
                 return True
-
-        else:
-            print("Error: PCS JSON data not in correct format. Missing 'subs' key.")
-
-        return False
 
 
 if __name__ == '__main__':
@@ -96,7 +102,7 @@ if __name__ == '__main__':
 
     if args.convert and args.event_prefix:
         result = convert_pcs_data(
-            args.even_prefix, args.pcs_path, args.output_path)
+            args.event_prefix, args.pcs_path, args.output_path)
         if result:
             print(
                 f"Converted {args.event_prefix} PCS data to {args.output_path}")
