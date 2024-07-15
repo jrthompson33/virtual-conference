@@ -260,13 +260,33 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
 
             # If presenter changed exists, then change contributors list
             contributors = p["Slot Presenters Changed"] if p["Slot Presenters Changed"] else p["Slot Contributors"]
+            contributor_list = contributors.split("|") if contributors else []
+
+            # TODO update authors to be a list of names, affiliations, is_corresponding, and email
+            author_names = [a.strip() for a in p_db["Authors"].split("|")] if (
+                p_db and "Authors" in p_db and p_db["Authors"]) else []
+            author_affiliations = [a.strip() for a in p_db["Author Affiliations"].split("|")] if (
+                p_db and "Author Affiliations" in p_db and p_db["Author Affiliations"]) else []
+            author_emails = [a.strip() for a in p_db["Author Emails"].split("|")] if (
+                p_db and "Author Emails" in p_db and p_db["Author Emails"]) else []
+
+            authors = []
+            print
+
+            if len(author_names) != len(author_affiliations) and len(author_names) != len(author_emails):
+                print(
+                    f"ERROR: Paper {p['Paper UID']} does not have equal number of author names, affiliations, and emails")
+            else:
+                for i in range(len(author_names)):
+                    authors.append({"name": author_names[i], "email": author_emails[i], "affiliations": author_affiliations[i].split(
+                        "&"), "is_corresponding": author_names[i] in contributor_list})
 
             p_data = {
                 "slot_id": p["Item ID"],
                 "session_id": p["Session ID"],
                 "title": p["Slot Title"],
-                "contributors": [c.strip() for c in contributors.split("|")] if contributors else [],
-                "authors": [a.strip() for a in p_db["Authors"].split("|")] if (p_db and "Authors" in p_db and p_db["Authors"]) else [],
+                "contributors": contributor_list,
+                "authors": authors,
                 "abstract": p_db["Abstract"] if p_db else "",
                 "uid": p["Paper UID"],
                 "time_stamp": format_time_iso8601_utc(parse_time(p["Slot DateTime Start"])) if (p and "Slot DateTime Start" in p and p["Slot DateTime Start"] != "") else "",
@@ -276,6 +296,9 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
                 "keywords": [k.strip() for k in p_db["Keywords"].split("|")] if p_db and p_db["Keywords"] else [],
                 "doi": p_db["DOI"] if p_db else "",
                 "fno": p_db["FNO"] if p_db else "",
+                "presentation_mode": p["Presentation Mode"],
+                "open_access": p_db["Open Access"] == "1" if p_db else False,
+                "accessible_pdf": p_db["Accessible PDF"] == "1" if p_db else False,
                 "has_image": p_db["Has Image"] == "1" if p_db else False,
                 "has_pdf": p_db["Has PDF"] == "1" if p_db else False,
                 "paper_award": p_db["Award"] if p_db else "",
