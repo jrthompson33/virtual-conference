@@ -13,7 +13,19 @@ event_prefix_dict = {
         "prefix": "v-short",
     },
     "v-full": {
-
+        "title": "VIS Full Papers",
+        "type": "Full Length Paper Presentation",
+        "prefix": "v-full",
+    },
+    "v-cga": {
+        "title": "CG&A Invited Presentations",
+        "type": "Full Length Paper Presentation",
+        "prefix": "v-cga",
+    },
+    "v-tvcg": {
+        "title": "TVCG Invited Presentations",
+        "type": "Full Length Paper Presentation",
+        "prefix": "v-tvcg",
     }
 }
 
