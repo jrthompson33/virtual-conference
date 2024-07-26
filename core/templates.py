@@ -8,10 +8,6 @@ def load_templates_dict() -> dict:
 
     For instance
     {
-        "paper_dropbox_requests" : {
-            "title" : "...",
-            "description" : "..."
-        },
         "email_template_1" : {
             "sender" : "",
             "recipient" : "",
@@ -21,6 +17,6 @@ def load_templates_dict() -> dict:
         }
     }
     """
-    with open(os.path.join("templates", "template_strings_2023.json"), "r", encoding='utf-8') as f:
+    with open(os.path.join("templates", "template_strings_2024.json"), "r", encoding='utf-8') as f:
         dct = json.load(f, )
         return dct
