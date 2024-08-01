@@ -11,6 +11,13 @@ import argparse
 from core.auth import Authentication
 from core.google_sheets import GoogleSheets
 
+# FNOs must be formated as plain text in the Google Sheets, or else you're get a UID missing key error
+
+# this is important for increasing the max size for long abstracts https://stackoverflow.com/a/15063941
+import csv
+import sys
+csv.field_size_limit(sys.maxsize)
+
 # Melbourne is in GMT+11, AEDT
 conf_tz = timezone(timedelta(hours=11))
 
@@ -278,8 +285,9 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
                     f"ERROR: Paper {p['Paper UID']} does not have equal number of author names, affiliations, and emails")
             else:
                 for i in range(len(author_names)):
-                    authors.append({"name": author_names[i], "email": author_emails[i], "affiliations": author_affiliations[i].split(
-                        "&"), "is_corresponding": author_names[i] in contributor_list})
+                    authors.append({"name": author_names[i], "email": author_emails[i], 
+                                    "affiliations": author_affiliations[i].split("&") if len(author_affiliations)>0 else "",
+                                    "is_corresponding": author_names[i] in contributor_list})
 
             p_data = {
                 "slot_id": p["Item ID"],
