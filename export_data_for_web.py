@@ -280,13 +280,18 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             authors = []
             print
 
-            if len(author_names) != len(author_affiliations) and len(author_names) != len(author_emails):
+            len_names = len(author_names)
+            len_emails = len(author_emails)
+            len_affiliations = len(author_affiliations)
+
+            if (len_emails > 0 and (len_names != len_emails)) or (len_affiliations > 0 and (len_names != len_affiliations)):
                 print(
-                    f"ERROR: Paper {p['Paper UID']} does not have equal number of author names, affiliations, and emails")
+                    f"ERROR: Paper {p['Paper UID']} does not have equal number of author names {len_names}, affiliations {len_affiliations}, and emails {len_emails}")
             else:
                 for i in range(len(author_names)):
-                    authors.append({"name": author_names[i], "email": author_emails[i], 
-                                    "affiliations": author_affiliations[i].split("&") if len(author_affiliations)>0 else "",
+                    authors.append({"name": author_names[i],
+                                    "email": author_emails[i] if len_emails > 0 else "",
+                                    "affiliations": author_affiliations[i].split("&") if len_affiliations > 0 else "",
                                     "is_corresponding": author_names[i] in contributor_list})
 
             p_data = {
