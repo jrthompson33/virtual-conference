@@ -22,9 +22,9 @@ def send_emails_to_authors(auth: Authentication, event_prefix: str, email_templa
             template = templates["upload_request_associated_event_workshop_late"]
         elif event_prefix == "a-ldav" or event_prefix == "a-vizsec" or event_prefix == "a-vds" or event_prefix == "a-visap" or event_prefix == "w-vis4dh" or event_prefix == "w-topoinvis" or event_prefix == "w-energyvis" or event_prefix == "w-vis4good" or event_prefix == "w-eduvis" or event_prefix == "w-visxvision" or event_prefix == "w-vahc" or event_prefix == "w-visxprov" or event_prefix == "a-biomedchallenge" or event_prefix == "w-altvis" or event_prefix == "w-viscomm" or event_prefix == "w-cityvis" or event_prefix == "w-nlviz" or event_prefix == "s-vds" or event_prefix == "w-vis4pandemres":
             template = templates["upload_request_associated_event_workshop"]
-        elif event_prefix == "v-siggraph" or event_prefix == "v-ismar" or event_prefix == "v-vr":
-            template = templates["upload_request_vr_ismar"]
-        elif event_prefix == "v-short" or event_prefix == "v-full" or event_prefix == "v-test":
+        elif event_prefix == "v-tvcg" or event_prefix == "v-cga" or event_prefix == "v-test":
+            template = templates["upload_request_tvcg_cga"]
+        elif event_prefix == "v-short" or event_prefix == "v-full":
             template = templates["upload_request_full_short"]
     elif email_template == "missing_preview":
         if event_prefix == "v-cga" or event_prefix == "v-tvcg":
