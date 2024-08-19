@@ -17,11 +17,19 @@ def send_emails_to_authors(auth: Authentication, event_prefix: str, email_templa
     sheet_db_papers = GoogleSheets()
     sheet_db_papers.load_sheet("PapersDB")
     templates = load_templates_dict()
+
+    sheet_events = GoogleSheets()
+    sheet_events.load_sheet("Events")
+    events_prefix_dict = dict()
+
+    for e in sheet_events.data:
+        events_prefix_dict[e["Event Prefix"]] = e["Event"]
+
     if email_template == "upload_request":
-        if event_prefix == "a-vast-challenge" or event_prefix == "a-scivis-contest" or event_prefix == "w-mercado" or event_prefix == "w-visxai":
-            template = templates["upload_request_associated_event_workshop_late"]
-        elif event_prefix == "a-ldav" or event_prefix == "a-vizsec" or event_prefix == "a-vds" or event_prefix == "a-visap" or event_prefix == "w-vis4dh" or event_prefix == "w-topoinvis" or event_prefix == "w-energyvis" or event_prefix == "w-vis4good" or event_prefix == "w-eduvis" or event_prefix == "w-visxvision" or event_prefix == "w-vahc" or event_prefix == "w-visxprov" or event_prefix == "a-biomedchallenge" or event_prefix == "w-altvis" or event_prefix == "w-viscomm" or event_prefix == "w-cityvis" or event_prefix == "w-nlviz" or event_prefix == "s-vds" or event_prefix == "w-vis4pandemres":
-            template = templates["upload_request_associated_event_workshop"]
+        if event_prefix == "v-spotlights" or event_prefix == "a-biomedchallenge" or event_prefix == "a-scivis-contest" or event_prefix == "w-visxai" or event_prefix == "w-nlviz" or event_prefix == "w-pdav" or event_prefix == "w-future" or event_prefix == "w-firstperson":
+            template = templates["upload_request_associated_event_no_xplore"]
+        elif event_prefix == "w-test" or event_prefix == "a-test" or event_prefix == "a-visap" or event_prefix == "s-vds" or event_prefix == "a-ldav" or event_prefix == "w-topoinvis" or event_prefix == "w-beliv" or event_prefix == "w-uncertainty" or event_prefix == "w-storygenai" or event_prefix == "w-accessible" or event_prefix == "w-energyvis" or event_prefix == "w-vis4climate" or event_prefix == "w-eduvis":
+            template = templates["upload_request_associated_event_xplore"]
         elif event_prefix == "v-tvcg" or event_prefix == "v-cga" or event_prefix == "v-test":
             template = templates["upload_request_tvcg_cga"]
         elif event_prefix == "v-short" or event_prefix == "v-full":
@@ -51,10 +59,16 @@ def send_emails_to_authors(auth: Authentication, event_prefix: str, email_templa
         papers = list(
             filter(lambda p: p["Event Prefix"] == event_prefix, sheet_db_papers.data))
 
-    print(f"{len(sheet_db_papers.data)} total papers loaded, filtered for {event_prefix}, for which {len(papers)} papers will be processed.")
+    print(f"{len(sheet_db_papers.data)} total papers loaded, filtered for {
+          event_prefix}, for which {len(papers)} papers will be processed.")
 
+    print(events_prefix_dict)
     for i in range(len(papers)):
         paper = papers[i]
+        if paper["Event Prefix"] in events_prefix_dict:
+            paper["Event"] = events_prefix_dict[paper["Event Prefix"]]
+        else:
+            print("event_prefix not found!")
         print(f"paper {i+1}/{len(papers)} {paper['UID']}")
         response = send_aws_email_paper(auth, paper, template)
         print(f"    {response}")
