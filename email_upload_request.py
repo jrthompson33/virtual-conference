@@ -26,9 +26,9 @@ def send_emails_to_authors(auth: Authentication, event_prefix: str, email_templa
         events_prefix_dict[e["Event Prefix"]] = e["Event"]
 
     if email_template == "upload_request":
-        if event_prefix == "v-spotlights" or event_prefix == "a-biomedchallenge" or event_prefix == "a-scivis-contest" or event_prefix == "w-visxai" or event_prefix == "w-nlviz" or event_prefix == "w-pdav" or event_prefix == "w-future" or event_prefix == "w-firstperson":
-            template = templates["upload_request_associated_event_no_xplore"]
-        elif event_prefix == "w-test" or event_prefix == "a-test" or event_prefix == "a-visap" or event_prefix == "s-vds" or event_prefix == "a-ldav" or event_prefix == "w-topoinvis" or event_prefix == "w-beliv" or event_prefix == "w-uncertainty" or event_prefix == "w-storygenai" or event_prefix == "w-accessible" or event_prefix == "w-energyvis" or event_prefix == "w-vis4climate" or event_prefix == "w-eduvis":
+        if event_prefix == "a-test" or event_prefix == "v-spotlights" or event_prefix == "a-biomedchallenge" or event_prefix == "a-scivis-contest" or event_prefix == "w-visxai" or event_prefix == "w-nlviz" or event_prefix == "w-pdav" or event_prefix == "w-future" or event_prefix == "w-firstperson":
+            template = templates["upload_request_associated_event_non_xplore"]
+        elif event_prefix == "w-test" or event_prefix == "a-visap" or event_prefix == "s-vds" or event_prefix == "a-ldav" or event_prefix == "w-topoinvis" or event_prefix == "w-beliv" or event_prefix == "w-uncertainty" or event_prefix == "w-storygenai" or event_prefix == "w-accessible" or event_prefix == "w-energyvis" or event_prefix == "w-vis4climate" or event_prefix == "w-eduvis":
             template = templates["upload_request_associated_event_xplore"]
         elif event_prefix == "v-tvcg" or event_prefix == "v-cga" or event_prefix == "v-test":
             template = templates["upload_request_tvcg_cga"]
@@ -62,7 +62,6 @@ def send_emails_to_authors(auth: Authentication, event_prefix: str, email_templa
     print(f"{len(sheet_db_papers.data)} total papers loaded, filtered for {
           event_prefix}, for which {len(papers)} papers will be processed.")
 
-    print(events_prefix_dict)
     for i in range(len(papers)):
         paper = papers[i]
         if paper["Event Prefix"] in events_prefix_dict:
