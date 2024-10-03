@@ -32,7 +32,7 @@ def format_affiliation(a):
 
 def format_author_affiliations(affiliations):
     """
-    Format the affiliations of an author. Use a tab to separate multiple affiliations for one author.
+    Format the affiliations of an author. Use a & to separate multiple affiliations for one author.
     """
     return "&".join([format_affiliation(a) for a in affiliations])
 
