@@ -40,7 +40,7 @@ def format_time_iso8601_utc(t: datetime):
 
 def format_time_local(t: datetime):
     localt = t.replace(tzinfo=timezone.utc).astimezone(tz=conf_tz)
-    return localt.strftime("%a %b %d %I:%M %p AEDT (UTC+11)")
+    return localt.strftime("%a %b %d %I:%M %p EDT (UTC-4)")
 
 
 def make_description_for_session(session_title: str, session_id: str, session_room: str, start_time: datetime, end_time: datetime):
@@ -49,13 +49,14 @@ def make_description_for_session(session_title: str, session_id: str, session_ro
     #     text += "\nEvent Webpage: {}".format(self.timeslot_entry(0, "Event URL").value)
 
     # NOTE: You'll want to replace this with the link to your conference session page
-    text += f"Session Webpage: https://virtual.ieeevis.org/year/2024/session_{session_id}.html \n"
+    text += f"Session Webpage: https://virtual.ieeevis.org/year/2024/session_{
+        session_id}.html \n"
 
     text += f"Session Room: {session_room} \n\n"
 
     # NOTE: include local time here as well
     text += f"Session Start: {format_time_local(start_time)}\n" + \
-            f"Session End: {format_time_local(end_time)}"
+        f"Session End: {format_time_local(end_time)}"
 
     # if self.timeslot_entry(0, "Discord Link").value:
     #     text += "\nDiscord Link: " + self.timeslot_entry(0, "Discord Link").value
@@ -129,8 +130,8 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
     sheet_ff_videos = GoogleSheets()
     sheet_ff_videos.load_sheet("FFVideos")
 
-    sheet_pre_videos = GoogleSheets()
-    sheet_pre_videos.load_sheet("TalkVideos")
+    # sheet_pre_videos = GoogleSheets()
+    # sheet_pre_videos.load_sheet("TalkVideos")
 
     sheet_bunny = GoogleSheets()
     sheet_bunny.load_sheet("BunnyContent")
@@ -158,9 +159,9 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
     for ff in sheet_ff_playlists.data:
         ff_playlists_dict[ff["FF P Source ID"]] = ff
 
-    pre_videos_dict = dict()
-    for v in sheet_pre_videos.data:
-        pre_videos_dict[v["Video Source ID"]] = v
+    # pre_videos_dict = dict()
+    # for v in sheet_pre_videos.data:
+    #     pre_videos_dict[v["Video Source ID"]] = v
 
     bunny_dict = dict()
     for bc in sheet_bunny.data:
@@ -199,6 +200,7 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             "session_id": sid,
             "event_prefix": s["Event Prefix"],
             "track": s["Track"],
+            "room_name": t["Room Name"] if t else "",
             "session_image": f'{s["Session ID"]}.png',
             "chair": [c.strip() for c in s["Session Chairs"].split("|")] if s["Session Chairs"] else [],
             # "organizers": [], does this need to be filled in?
@@ -208,11 +210,11 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             "discord_channel": t["Discord Channel"] if t else "",
             "discord_channel_id": t["Discord Channel ID"] if t else "",
             "discord_link": t["Discord URL"] if t else "",
-            # TODO should we create Zooms for some sessions? I think we need this for the CC
             "zoom_private_meeting": "",
             "zoom_private_password": "",
             "zoom_private_link": "",
             "zoom_broadcast_link": "",
+            "zoom_webinar_link": "",
             "ff_link": s_ff["FF Link"] if s_ff is not None else (s["Session FF URL"] if s else ""),
             "time_slots": [],
         }
@@ -242,7 +244,7 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             uid = p["Paper UID"]
             p_db = db_papers_dict[uid] if uid in db_papers_dict else None
             ff = ff_videos_dict[uid] if uid in ff_videos_dict else None
-            pv = pre_videos_dict[uid] if uid in pre_videos_dict else None
+            # pv = pre_videos_dict[uid] if uid in pre_videos_dict else None
             bc = bunny_dict[uid] if uid in bunny_dict else None
 
             p_event_prefix = p_db["Event Prefix"] if p_db else ""
@@ -285,6 +287,7 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             len_affiliations = len(author_affiliations)
 
             if (len_emails > 0 and (len_names != len_emails)) or (len_affiliations > 0 and (len_names != len_affiliations)):
+                print(uid)
                 print(
                     f"ERROR: Paper {p['Paper UID']} does not have equal number of author names {len_names}, affiliations {len_affiliations}, and emails {len_emails}")
             else:
@@ -293,6 +296,9 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
                                     "email": author_emails[i] if len_emails > 0 else "",
                                     "affiliations": author_affiliations[i].split("&") if len_affiliations > 0 else "",
                                     "is_corresponding": author_names[i] in contributor_list})
+
+            if p_db:
+                print(p["Paper UID"], p_db["Has Image"], type(p_db["Has Image"]))
 
             p_data = {
                 "slot_id": p["Item ID"],
@@ -310,8 +316,10 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
                 "doi": p_db["DOI"] if p_db else "",
                 "fno": p_db["FNO"] if p_db else "",
                 "presentation_mode": p["Presentation Mode"],
-                "open_access": p_db["Open Access"] == "1" if p_db else False,
-                "accessible_pdf": p_db["Accessible PDF"] == "1" if p_db else False,
+                "open_access_supplemental_question": p_db["Open Access Supplemental Question"] if p_db else "",
+                "open_access_supplemental_link": p_db["Open Access Supplemental Link"] if p_db else "",
+                "preprint_link": p_db["Preprint Link"] if p_db else "",
+                "accessible_pdf": p_db["Accessible PDF"] == "Accessible" if p_db else False,
                 "has_image": p_db["Has Image"] == "1" if p_db else False,
                 "has_pdf": p_db["Has PDF"] == "1" if p_db else False,
                 "paper_award": p_db["Award"] if p_db else "",
@@ -323,8 +331,8 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
                 "bunny_ff_link": bc["FF Video Bunny URL"] if bc else "",
                 "bunny_ff_subtitles": bc["FF Video Subtitles Bunny URL"] if bc else "",
                 # This comes from Videos Sheet
-                "youtube_prerecorded_link": pv["Video Link"] if pv else "",
-                "youtube_prerecorded_id": pv["Video ID"] if pv else "",
+                # "youtube_prerecorded_link": pv["Video Link"] if pv else "",
+                # "youtube_prerecorded_id": pv["Video ID"] if pv else "",
                 "bunny_prerecorded_link": bc["Video Bunny URL"] if bc else "",
                 "bunny_prerecorded_subtitles": bc["Video Subtitles Bunny URL"] if bc else "",
             }
