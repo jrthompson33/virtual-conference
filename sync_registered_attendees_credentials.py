@@ -35,7 +35,7 @@ def get_asn_attendees(auth: Authentication) -> list:
 
 def get_cvent_attendees(auth: Authentication) -> list:
     cvent_attendees = json.loads(cvent_scraper.get_attendees_json(auth))
-    return cvent_attendees
+    return cvent_attendees['Data']
 
 
 def get_auth0_users(auth: Authentication) -> list:
@@ -63,9 +63,11 @@ def sync_attendees(auth: Authentication, vendor: Vendor):
     # for a in attendees:
     #     print(a)
 
-    # Loop through and print auth0 users
+    # # Loop through and print auth0 users
     # for au in auth0_users:
     #     print(au)
+
+    auth_count = 0
 
     for a in attendees:
         name = None
@@ -78,9 +80,8 @@ def sync_attendees(auth: Authentication, vendor: Vendor):
             isValid = a['Item Name'] != 'Cancelled Registration - No Fee'
         elif vendor == Vendor.CVENT:
             name = a['FullName']
-            email = a['Email']
-            # Need to figure out CVENT valid for all future conferences (if using CVENT)
-            isValid = False
+            email = a['EmailAddress']
+            isValid = a['InviteeStatus'] == 'Accepted'
         elif vendor == Vendor.EVENTBRITE:
             name = a['profile']['name']
             email = a['profile']['email']
@@ -94,7 +95,10 @@ def sync_attendees(auth: Authentication, vendor: Vendor):
             au = next((a for a in auth0_users if a['email'].strip(
             ).lower() == email.strip().lower()), None)
             if au == None:
-                create_user(auth, auth.get_auth0_token(), email, name, {'invite_email_sent': False})
+                create_user(auth, auth.get_auth0_token(), email,
+                            name, {'invite_email_sent': False})
+                auth_count += 1
+    print(f"{auth_count} attendees authorized in Auth0")
 
 
 def monitor_sync_attendees(auth: Authentication, vendor: Vendor):
