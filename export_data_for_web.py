@@ -297,9 +297,6 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
                                     "affiliations": author_affiliations[i].split("&") if len_affiliations > 0 else "",
                                     "is_corresponding": author_names[i] in contributor_list})
 
-            if p_db:
-                print(p["Paper UID"], p_db["Has Image"], type(p_db["Has Image"]))
-
             p_data = {
                 "slot_id": p["Item ID"],
                 "session_id": p["Session ID"],
