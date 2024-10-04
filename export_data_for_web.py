@@ -220,18 +220,21 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
         }
 
         if export_ics:
-            calendar = make_calendar_for_session(s["Session Title"], s["Session ID"], t["Room Name"] if t else "", parse_time(
-                s["DateTime Start"]), parse_time(s["DateTime End"]))
+            # TODO check sessions
+            if s["DateTime Start"] and s["DateTime End"]:
 
-            full_calendar.events |= calendar.events
+                calendar = make_calendar_for_session(s["Session Title"], s["Session ID"], t["Room Name"] if t else "", parse_time(
+                    s["DateTime Start"]), parse_time(s["DateTime End"]))
 
-            if s["Event Prefix"] not in event_calendars:
-                event_calendars[s["Event Prefix"]] = ics.Calendar()
-            event_calendars[s["Event Prefix"]].events |= calendar.events
+                full_calendar.events |= calendar.events
 
-            # Create the session ics file
-            with open(os.path.join(output_dir, "ics", s["Session ID"] + ".ics"), "w", encoding="utf8") as f:
-                f.write(calendar.serialize())
+                if s["Event Prefix"] not in event_calendars:
+                    event_calendars[s["Event Prefix"]] = ics.Calendar()
+                event_calendars[s["Event Prefix"]].events |= calendar.events
+
+                # Create the session ics file
+                with open(os.path.join(output_dir, "ics", s["Session ID"] + ".ics"), "w", encoding="utf8") as f:
+                    f.write(calendar.serialize())
 
         filtered_papers = list(
             filter(lambda p: p["Session ID"] == s_data["session_id"], sheet_papers.data))
@@ -280,7 +283,6 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
                 p_db and "Author Emails" in p_db and p_db["Author Emails"]) else []
 
             authors = []
-            print
 
             len_names = len(author_names)
             len_emails = len(author_emails)
@@ -349,16 +351,46 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
                 f"MISSING: event prefix of {s_data['event_prefix']} in all_events.")
 
     for p in sheet_posters.data:
+        # If presenter changed exists, then change contributors list
+        contributors = p["Presenting Author (name)"]
+        contributor_list = contributors.split("|") if contributors else []
+        
+            # TODO update authors to be a list of names, affiliations, is_corresponding, and email
+        author_names = [a.strip() for a in p["Authors"].split("|")] if (
+            p and "Authors" in p and p["Authors"]) else []
+        author_affiliations = [a.strip() for a in p["ACM Author Affiliations"].split("|")] if (
+            p and "ACM Author Affiliations" in p and p["ACM Author Affiliations"]) else []
+        author_emails = [a.strip() for a in p["Presenting Author (email)"].split("|")] if (
+            p and "Presenting Author (email)" in p and p["Presenting Author (email)"]) else []
+
+        authors = []
+
+        len_names = len(author_names)
+        len_emails = len(author_emails)
+        len_affiliations = len(author_affiliations)
+        print(len_affiliations)
+
+        if (len_affiliations > 0 and (len_names != len_affiliations)):
+            print(uid)
+            print(
+                f"ERROR: Poster {p['UID']} does not have equal number of author names {len_names} and affiliations {len_affiliations}.")
+        else:
+            for i in range(len(author_names)):
+                authors.append({"name": author_names[i],
+                                "email": author_emails[i] if len_emails > i else "",
+                                "affiliations": author_affiliations[i].split("&") if len_affiliations > 0 else "",
+                                "is_corresponding": author_names[i] in contributor_list})
+        
         p_data = {
             "event": p["Event"],
             "event_prefix": p["Event Prefix"],
             "title": p["Title"],
             "uid": p["UID"],
             "discord_channel": "",
-            "authors": [a.strip() for a in p["Authors"].split("|")] if p["Authors"] else [],
-            "author_affiliations": [a.strip() for a in p["ACM Author Affiliations"].split(";")] if p["ACM Author Affiliations"] else [],
-            "presenting_author_name": p["Presenting Author (name)"],
-            "presenting_author_email": p["Presenting Author (email)"],
+            "authors": authors,
+            # "author_affiliations": [a.strip() for a in p["ACM Author Affiliations"].split(";")] if p["ACM Author Affiliations"] else [],
+            # "presenting_author_name": p["Presenting Author (name)"],
+            # "presenting_author_email": p["Presenting Author (email)"],
             "abstract": p["Abstract"],
             "has_summary_pdf": p["Has Summary PDF"] == "1" if p else False,
             "has_poster_pdf": p["Has Poster PDF"] == "1" if p else False,
