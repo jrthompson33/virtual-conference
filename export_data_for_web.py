@@ -329,8 +329,8 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
                 # This comes from Videos Sheet
                 # "youtube_prerecorded_link": pv["Video Link"] if pv else "",
                 # "youtube_prerecorded_id": pv["Video ID"] if pv else "",
-                "bunny_prerecorded_link": bc["Video Bunny URL"] if bc else "",
-                "bunny_prerecorded_subtitles": bc["Video Subtitles Bunny URL"] if bc else "",
+                # "bunny_prerecorded_link": bc["Video Bunny URL"] if bc else "",
+                # "bunny_prerecorded_subtitles": bc["Video Subtitles Bunny URL"] if bc else "",
             }
 
             s_data["time_slots"].append(p_data)
