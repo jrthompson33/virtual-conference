@@ -19,7 +19,7 @@ import sys
 csv.field_size_limit(sys.maxsize)
 
 # Melbourne is in GMT+11, AEDT
-conf_tz = timezone(timedelta(hours=11))
+conf_tz = timezone(timedelta(hours=-4))
 
 
 def parse_time(t: str):
@@ -49,7 +49,7 @@ def make_description_for_session(session_title: str, session_id: str, session_ro
     #     text += "\nEvent Webpage: {}".format(self.timeslot_entry(0, "Event URL").value)
 
     # NOTE: You'll want to replace this with the link to your conference session page
-    text += f"Session Webpage: https://virtual.ieeevis.org/year/2024/session_{
+    text += f"Session Webpage: https://ieeevis.org/year/2024/program/session_{
         session_id}.html \n"
 
     text += f"Session Room: {session_room} \n\n"
@@ -71,9 +71,6 @@ def make_calendar_for_session(session_title: str, session_id: str, session_room:
     calendar = ics.Calendar()
     event = ics.Event()
     event.begin = start_time
-    # Use this for sending events to SVs, Chairs, etc.
-    # if with_setup_time:
-    #     event.begin -= self.setup_time()
     event.end = end_time
     event.name = session_title + " [VIS 2024]"
     event.location = session_room
@@ -368,10 +365,8 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
         len_names = len(author_names)
         len_emails = len(author_emails)
         len_affiliations = len(author_affiliations)
-        print(len_affiliations)
 
         if (len_affiliations > 0 and (len_names != len_affiliations)):
-            print(uid)
             print(
                 f"ERROR: Poster {p['UID']} does not have equal number of author names {len_names} and affiliations {len_affiliations}.")
         else:
@@ -386,7 +381,7 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             "event_prefix": p["Event Prefix"],
             "title": p["Title"],
             "uid": p["UID"],
-            "discord_channel": "",
+            "discord_channel": "https://discord.com/channels/1286338967674818684/1288497673212788798",
             "authors": authors,
             # "author_affiliations": [a.strip() for a in p["ACM Author Affiliations"].split(";")] if p["ACM Author Affiliations"] else [],
             # "presenting_author_name": p["Presenting Author (name)"],
