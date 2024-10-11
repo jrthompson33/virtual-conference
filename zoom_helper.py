@@ -12,7 +12,6 @@ from core.auth import Authentication
 
 
 def get_headers_with_access(auth: Authentication):
-    print(auth.zoom)
     client_id = auth.zoom["client_id"]
     account_id = auth.zoom["account_id"]
     client_secret = auth.zoom["client_secret"]
@@ -238,6 +237,7 @@ def schedule_zoom_meeting(headers: Any, title: str, password: str, start: dateti
     print(create_meeting_resp)
     return create_meeting_resp.json()
 
+
 def schedule_meetings(args: argparse.Namespace):
     """Schedule meetings based on Sessions sheet in Data spreadsheet
     """
@@ -263,12 +263,12 @@ def schedule_meetings(args: argparse.Namespace):
     # Filter out sessions that have not been scheduled yet and have a Track
     sessions = list(filter(lambda row: row["Track"] and len(row["Track"].strip()) > 0 and row["Track"].strip() != "various" and
                            (row["Zoom Meeting ID"] is None or len(row["Zoom Meeting ID"].strip()) == 0), sessions_sheet.data))
-    
+
     # Filter for args event_prefix
     if args.event_prefix and len(args.event_prefix) > 0:
         sessions = list(
             filter(lambda it: it["Event Prefix"] == args.event_prefix, sessions))
-        
+
     # Filter for args track id
     if args.track and len(args.track) > 0:
         sessions = list(filter(lambda it: it["Track"] == args.track, sessions))
@@ -294,11 +294,13 @@ def schedule_meetings(args: argparse.Namespace):
         host = track["Zoom Host ID"]
         password = generate_password()
         event_name = events_dict[session["Event Prefix"]]
-        agenda =  f"Event: {event_name}\n Session: {session["Session Title"]}\n Program: https://ieeevis.org/year/2024/program/session_{session["Session ID"]}.html"
+        agenda = f"Event: {event_name}\n Session: {
+            session["Session Title"]}\n Program: https://ieeevis.org/year/2024/program/session_{session["Session ID"]}.html"
         if host:
             print(
                 f"\r\n{i+1}/{num_to_schedule}: {title} - {room} | {start} - {end} | {host}")
-            resp = schedule_zoom_meeting(headers, f"IEEE VIS - {title}", password, start, end, agenda, host, session_id)
+            resp = schedule_zoom_meeting(
+                headers, f"IEEE VIS - {title}", password, start, end, agenda, host, session_id)
             print(f"\r\n{json.dumps(resp, indent=4)}")
             session["Zoom Meeting ID"] = str(resp["id"])
             session["Zoom Password"] = password
@@ -306,10 +308,56 @@ def schedule_meetings(args: argparse.Namespace):
             session["Zoom Host Start URL"] = resp["start_url"]
             session["Zoom Host Username"] = host
             session["Slido URL"] = track["Slido URL"]
-        
+
             sessions_sheet.save()
         else:
             print(f"Zoom Host not found for session {session_id}")
+
+
+def update_zoom_meeting_livestream(auth: Authentication, meeting_id: int, page_url: str, stream_key: str, stream_url: str, resolution: str = "1080p"):
+    livestream_info = {
+        # The live stream page URL.
+        "page_url": page_url,
+        # Stream name and key.
+        "stream_key": stream_key,
+        # Streaming URL
+        "stream_url": stream_url,
+        "resolution": resolution
+    }
+
+    headers = get_headers_with_access(auth)
+    response = requests.patch(f"https://api.zoom.us/v2/meetings/{
+                              meeting_id}/livestream", headers=headers, json=livestream_info)
+    return response
+
+
+def update_session_zoom_livestreams(auth: Authentication):
+    session_sheet = GoogleSheets()
+    session_sheet.load_sheet("Sessions")
+    sessions = session_sheet.data
+    streamkeys_sheet = GoogleSheets()
+    streamkeys_sheet.load_sheet("StreamKeys")
+    streamkeys = streamkeys_sheet.data
+    streamkeys_dict = dict()
+    for sk in streamkeys:
+        streamkeys_dict[sk["Track"]] = sk
+
+    print(f"Updating livestream for {len(sessions)} Zoom Meetings")
+    success = 0
+    for s in sessions:
+        id = s["Zoom Meeting ID"]
+        sk = streamkeys_dict[s["Track"]]
+        page_url = s["Session YouTube URL"]
+        stream_key = sk["Stream Key"]
+        stream_url = sk["Ingestion URL"]
+        resp = update_zoom_meeting_livestream(
+            auth, id, page_url, stream_key, stream_url, "1080p")
+        if resp.status_code != 204:
+            print(resp.status_code, resp.text)
+            print(f"{id} meeting not updated")
+        else:
+            success += 1
+    print(f"{success} out of {len(sessions)} updated")
 
 
 if __name__ == '__main__':
@@ -320,6 +368,8 @@ if __name__ == '__main__':
                         help='delete specified meeting')
     parser.add_argument('--get', action="store_true",
                         help='get info of specified meeting')
+    parser.add_argument('--update_livestream', action="store_true",
+                        help='update the livestream for all sessions based on streamkeys to YouTube')
     parser.add_argument('--start_url', action="store_true",
                         help='retrieve start url of a meeting')
 
@@ -348,3 +398,5 @@ if __name__ == '__main__':
     elif args.get:
         resp = get_meeting(Authentication(), args.id)
         print(json.dumps(resp, indent=4))
+    elif args.update_livestream:
+        update_session_zoom_livestreams(Authentication())
