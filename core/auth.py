@@ -85,12 +85,8 @@ class Authentication:
             self.cvent = auth["cvent"]
             self.gsheets = auth["gsheets"]
             self.asn = auth["asn"]
-
-            self.zoom = {
-                "authorization": "Bearer {}".format(auth["zoom"]["jwt_token"]),
-                "content-type": "application/json"
-            }
-
+            self.zoom = auth["zoom"]
+            
             self.email = None
             self.youtube = None
 
