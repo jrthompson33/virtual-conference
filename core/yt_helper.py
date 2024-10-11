@@ -279,6 +279,7 @@ class YouTubeHelper:
         """
         title = self.make_youtube_title(title)
         description = self.make_youtube_description(description)
+        # https://developers.google.com/youtube/v3/live/docs/liveBroadcasts#resource
         broadcast_info = self.auth.youtube.liveBroadcasts().insert(
             part="id,snippet,contentDetails,status",
             body={
@@ -295,7 +296,7 @@ class YouTubeHelper:
                     "recordFromStart": True,
                     "startWithSlate": False,
                     # We must use a low latency only stream if using live captions
-                    "latencyPreference": "low" if enable_captions else "ultraLow",
+                    "latencyPreference": "normal",
                     "monitorStream": {
                         "enableMonitorStream": False,
                         "broadcastStreamDelayMs": 0
@@ -417,7 +418,7 @@ class YouTubeHelper:
         page_token = None
         while True:
             items = self.auth.youtube.liveStreams().list(
-                part="id,snippet,contentDetails,status",
+                part="id,snippet,cdn,status",
                 maxResults=50,
                 mine=True,
                 pageToken=page_token
