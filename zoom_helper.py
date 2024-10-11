@@ -5,31 +5,171 @@ from typing import Any, List
 import requests
 import string
 import secrets
+import base64
 
 from core.google_sheets import GoogleSheets
 from core.auth import Authentication
+
+
+def get_headers_with_access(auth: Authentication):
+    print(auth.zoom)
+    client_id = auth.zoom["client_id"]
+    account_id = auth.zoom["account_id"]
+    client_secret = auth.zoom["client_secret"]
+
+    credentials = base64.b64encode(
+        f"{client_id}:{client_secret}".encode()).decode()
+
+    # Create the Authorization header
+    headers = {
+        "Authorization": f"Basic {credentials}"
+    }
+
+    oauth_endpoint = f"https://zoom.us/oauth/token?grant_type=account_credentials&account_id={
+        account_id}"
+
+    payload = {}
+
+    response = requests.request(
+        "POST", oauth_endpoint, headers=headers, data=payload)
+
+    if response.status_code == 200:
+        access_token = response.json()["access_token"]
+        access_headers = {
+            "Authorization": f"Bearer {access_token}"
+        }
+        return access_headers
+    else:
+        None
+
+
+def format_time_iso8601_utc(t: datetime):
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def generate_password() -> str:
     alphabet = string.ascii_letters + string.digits
     return ''.join(secrets.choice(alphabet) for i in range(6))
 
-def delete_meeting(auth : Authentication, meeting_id : str) -> requests.Response:
+
+def delete_meeting(auth: Authentication, meeting_id: str) -> requests.Response:
     """delete a scheduled Zoom meeting
     """
-    resp = requests.delete(f"https://api.zoom.us/v2/meetings/{meeting_id}", headers=auth.zoom).json()
+    headers = get_headers_with_access(auth)
+    resp = requests.delete(
+        f"https://api.zoom.us/v2/meetings/{meeting_id}", headers=headers).json()
     return resp
-    
 
-def get_meeting(auth : Authentication, meeting_id : str) -> requests.Response:
+
+def schedule_zoom_webinar(auth: Authentication, title: str, password: str, start: datetime, end: datetime,
+                          agenda: str, user_id: str, alternative_hosts: List[str] = []):
+    # Compute the duration
+    difference = start - end
+    duration = divmod(difference.total_seconds(), 60)[0]
+
+    webinar_info = {
+        # Webinar description. Need to explain all sessions in Zoom Webinar.
+        "agenda": agenda,
+        # Webinar duration in minutes. Used for scheduled webinars only.
+        "duration": duration,
+        # Webinar passcode. Passcode may only contain the characters [a-z A-Z 0-9 @ - _ * !]. Maximum of 10 characters.
+        "password": password,
+        # Whether to generate a default passcode using the user's settings. This value defaults to false.
+        "default_passcode": False,
+        "settings": {
+            "allow_multiple_devices": True,
+            # Alternative host emails or IDs. Multiple values separated by comma.
+            "alternative_hosts": ",".join(alternative_hosts),
+            "alternative_host_update_polls": True,
+            # The default value is 2. To enable registration required, set the approval type to 0 or 1.
+            "approval_type": 2,
+            # Send reminder email to attendees and panelists.
+            "attendees_and_panelists_reminder_email_notification": {
+                "enable": False,
+                "type": 0
+            },
+            "auto_recording": "none",
+            "contact_email": "ieeevistech@gmail.com",
+            "contact_name": "IEEE VIS Tech Chairs",
+            "email_language": "en-US",
+            "follow_up_absentees_email_notification": {
+                "enable": False,
+            },
+            "follow_up_attendees_email_notification": {
+                "enable": False,
+            },
+            # Default to HD video.
+            "hd_video": True,
+            # Whether HD video for attendees is enabled.
+            "hd_video_for_attendees": True,
+            # Start video when host joins webinar.(
+            "host_video": False,
+            "language_interpretation": {
+                "enable": False,
+            },
+            "sign_language_interpretation": {
+                "enable": False,
+            },
+            # Require panelists to authenticate to join
+            "panelist_authentication": False,
+            # Only authenticated users can join meeting if the value of this field is set to true.
+            "meeting_authentication": False,
+            "add_watermark": False,
+            "add_audio_watermark": False,
+            "on_demand": False,
+            "panelists_invitation_email_notification": False,
+            "panelists_video": False,
+            "post_webinar_survey": False,
+            "practice_session": False,
+            "question_and_answer": {
+                "enable": False
+            },
+            # Send email notifications to registrants about approval, cancellation, denial of the registration.
+            "registrants_email_notification": False,
+            # Restrict number of registrants for a webinar. By default, it is set to 0. A 0 value means that the restriction option is disabled. Provide a number higher than 0 to restrict the webinar registrants by the that number.
+            "registrants_restrict_number": 0,
+            # Registration types. Only used for recurring webinars with a fixed time.
+            "registration_type": 1,
+            # Whether to always send 1080p video to attendees.
+            "send_1080p_video_to_attendees": True,
+            "show_share_button": False,
+            # Whether the Webinar Session Branding setting is enabled. This setting lets hosts visually customize a webinar by setting a session background.
+            "enable_session_branding": False
+        },
+        "start_time": start,
+        # "timezone": "America/Los_Angeles",
+        "topic": title,
+        # Webinar types. 5 - Webinar.
+        "type": 5,
+        "is_simulive": False,
+    }
+
+    headers = get_headers_with_access(auth)
+    zoom_info = requests.post(f"https://api.zoom.us/v2/users/{user_id}/webinars",
+                              json=webinar_info, headers=headers).json()
+    return zoom_info
+
+
+def get_webinar(auth: Authentication, webinar_id: str) -> requests.Response:
+    """ get info of a scheduled Zoom webinar
+    """
+    headers = get_headers_with_access(auth)
+    resp = requests.get(
+        f"https://api.zoom.us/v2/webinars/{webinar_id}", headers=headers).json()
+    return resp
+
+
+def get_meeting(auth: Authentication, meeting_id: str) -> requests.Response:
     """get info of a scheduled Zoom meeting such as start_url
     """
-    resp = requests.get(f"https://api.zoom.us/v2/meetings/{meeting_id}", headers=auth.zoom).json()
+    headers = get_headers_with_access(auth)
+    resp = requests.get(
+        f"https://api.zoom.us/v2/meetings/{meeting_id}", headers=headers).json()
     return resp
-    
 
-def schedule_zoom_meeting(auth : Authentication, title : str, password : str, start : datetime, end : datetime, 
-                          agenda : str, host : str , alternative_hosts : List[str] = [], use_dialin : bool = True):
+
+def schedule_zoom_meeting(headers: Any, title: str, password: str, start: datetime, end: datetime,
+                          agenda: str, user_id: str, session_id: str):
     """Schedule a zoom meeting
     """
     # Max Zoom meeting topic length is 200 characters
@@ -38,55 +178,98 @@ def schedule_zoom_meeting(auth : Authentication, title : str, password : str, st
     # Max agenda length is 2000 characters
     if len(agenda) > 2000:
         agenda = agenda[0:1999]
-    
+
+    difference = end - start
+    duration = divmod(difference.total_seconds(), 60)[0]
+
     meeting_info = {
-        "topic": title,
-        "type": 2,
-        "start_time": start.astimezone(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "timezone": "UTC",
-        "duration": int((end - start).total_seconds() / 60.0),
-        "password": password,
         "agenda": agenda,
+        "default_password": False,
+        "duration": int(duration),
+        "password": password,
+        # Whether to create a prescheduled meeting via the GSuite app. This only supports the meeting type value of 2 (scheduled meetings) and 3 (recurring meetings with no fixed time).
+        "pre_schedule": False,
         "settings": {
-            "host_video": False,
-            "participant_video": False,
-            "join_before_host": True,
-            "mute_upon_entry": True,
-            "waiting_room": False,
+            "allow_multiple_devices": True,
+            # Enable meeting registration approval. 2 - No registration required.
+            "approval_type": 2,
             "audio": "both",
-            "alternative_hosts": ",".join(alternative_hosts),
-            "global_dial_in_countries": [
-                # NOTE: Fill in dial in countries as appropriate for your conference
-                "DE",
-                "SE",
-                "JP",
-                "KR",
-                "GB",
-                "US",
-                "CA"
-            ] if use_dialin else []
-        }
+            "auto_recording": "none",
+            "close_registration": False,
+            "contact_email": "ieeevistech@gmail.com",
+            "contact_name": "IEEE VIS Tech Chairs",
+            "email_notification": False,
+            "focus_mode": False,
+            "host_video": False,
+            "jbh_time": 0,
+            "join_before_host": False,
+            "meeting_authentication": True,
+            "global_dial_in_countries": [],
+            "mute_upon_entry": True,
+            "participant_video": False,
+            "private_meeting": False,
+            "registrants_confirmation_email": False,
+            "registrants_email_notification": False,
+            "registration_type": 1,
+            "use_pmi": False,
+            "waiting_room": False,
+            "watermark": False,
+            "continuous_meeting_chat": {
+                "enable": True,
+                "auto_add_invited_external_users": True
+            },
+            "participant_focused_meeting": False,
+        },
+        "start_time": format_time_iso8601_utc(start),
+        # https://developers.zoom.us/docs/api/rest/other-references/abbreviation-lists/
+        "timezone": "America/New_York",
+        "topic": title,
+        "tracking_fields": [
+            {
+                "field": "session_id",
+                "value": session_id
+            }
+        ],
+        "type": 2
     }
 
-    zoom_info = requests.post(f"https://api.zoom.us/v2/users/{host}/meetings",
-            json=meeting_info, headers=auth.zoom).json()
-    return zoom_info
+    create_meeting_resp = requests.post(f"https://api.zoom.us/v2/users/{user_id}/meetings",
+                                        json=meeting_info, headers=headers)
+    print(create_meeting_resp)
+    return create_meeting_resp.json()
 
-def schedule_meetings(args : argparse.Namespace):
+def schedule_meetings(args: argparse.Namespace):
+    """Schedule meetings based on Sessions sheet in Data spreadsheet
+    """
     """Schedule meetings based on Sessions sheet in Data spreadsheet
     """
     auth = Authentication()
-    sessionsSheet = GoogleSheets()
-    sessionsSheet.load_sheet("Sessions")
+    headers = get_headers_with_access(auth)
+
+    sessions_sheet = GoogleSheets()
+    sessions_sheet.load_sheet("Sessions")
     tracks = GoogleSheets()
     tracks.load_sheet("Tracks")
-    tracks_dict : dict[dict[str, Any], Any] = {}
+    tracks_dict: dict[dict[str, Any], Any] = {}
     for row in tracks.data:
         tracks_dict[row["Track"]] = row
-    sessions = list(filter(lambda row: row["Track"] and len(row["Track"].strip()) > 0 and row["Track"].strip() != "various" and \
-       (row["Zoom Meeting ID"] is None or len(row["Zoom Meeting ID"].strip()) == 0), sessionsSheet.data))
+    events_sheet = GoogleSheets()
+    events_sheet.load_sheet("Events")
+    events = events_sheet.data
+    events_dict = dict()
+    for e in events:
+        events_dict[e["Event Prefix"]] = e["Event"]
+
+    # Filter out sessions that have not been scheduled yet and have a Track
+    sessions = list(filter(lambda row: row["Track"] and len(row["Track"].strip()) > 0 and row["Track"].strip() != "various" and
+                           (row["Zoom Meeting ID"] is None or len(row["Zoom Meeting ID"].strip()) == 0), sessions_sheet.data))
+    
+    # Filter for args event_prefix
     if args.event_prefix and len(args.event_prefix) > 0:
-        sessions = list(filter(lambda it: it["Event Prefix"] == args.event_prefix, sessions))
+        sessions = list(
+            filter(lambda it: it["Event Prefix"] == args.event_prefix, sessions))
+        
+    # Filter for args track id
     if args.track and len(args.track) > 0:
         sessions = list(filter(lambda it: it["Track"] == args.track, sessions))
 
@@ -95,43 +278,65 @@ def schedule_meetings(args : argparse.Namespace):
         num_to_schedule = args.max_n_schedules
 
     print(f"{num_to_schedule} meetings will be scheduled")
-    use_dialin = True
-    if args.disable_dialin:
-        use_dialin = False
+
     for i in range(num_to_schedule):
-        session : dict[str, Any] = sessions[i]
+        session: dict[str, Any] = sessions[i]
         title = session["Session Title"]
         track = tracks_dict[session["Track"]]
-        start = datetime.fromisoformat(session["DateTime Start"].replace('Z', '+00:00'))
-        end = datetime.fromisoformat(session["DateTime End"].replace('Z', '+00:00'))
+        session_id = session["Session ID"]
+        start = datetime.fromisoformat(
+            session["DateTime Start"].replace('Z', '+00:00'))
+        end = datetime.fromisoformat(
+            session["DateTime End"].replace('Z', '+00:00'))
         start = start - timedelta(minutes=args.time_before)
         end = end + timedelta(minutes=args.time_after)
         room = track["Room Name"]
         host = track["Zoom Host ID"]
         password = generate_password()
-        print(f"\r\n{i+1}/{num_to_schedule}: {title} - {room} | {start} - {end} | {host}")
-        resp = schedule_zoom_meeting(auth, f"Session: {title}", password, start, end, "Conference Session for Hosts and Presenter", host, use_dialin=use_dialin)
-        print(f"\r\n{json.dumps(resp, indent=4)}")
-        session["Zoom Meeting ID"] = str(resp["id"])
-        session["Zoom Password"] = password
-        session["Zoom URL"] = resp["join_url"]
-        sessionsSheet.save()
+        event_name = events_dict[session["Event Prefix"]]
+        agenda =  f"Event: {event_name}\n Session: {session["Session Title"]}\n Program: https://ieeevis.org/year/2024/program/session_{session["Session ID"]}.html"
+        if host:
+            print(
+                f"\r\n{i+1}/{num_to_schedule}: {title} - {room} | {start} - {end} | {host}")
+            resp = schedule_zoom_meeting(headers, f"IEEE VIS - {title}", password, start, end, agenda, host, session_id)
+            print(f"\r\n{json.dumps(resp, indent=4)}")
+            session["Zoom Meeting ID"] = str(resp["id"])
+            session["Zoom Password"] = password
+            session["Zoom URL"] = resp["join_url"]
+            session["Zoom Host Start URL"] = resp["start_url"]
+            session["Zoom Host Username"] = host
+            session["Slido URL"] = track["Slido URL"]
+        
+            sessions_sheet.save()
+        else:
+            print(f"Zoom Host not found for session {session_id}")
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Schedule zoom meetings')
-    parser.add_argument('--schedule', action="store_true", help='schedule zoom meetings for sessions in sheet')
-    parser.add_argument('--delete', action="store_true", help='delete specified meeting')
-    parser.add_argument('--get', action="store_true", help='get info of specified meeting')
-    parser.add_argument('--start_url', action="store_true", help='retrieve start url of a meeting')
-    
-    parser.add_argument("--max_n_schedules", default=200, type=int, help='Maximum number of meetings to schedule in a call')
-    parser.add_argument("--time_before", default=15, type=int, help='Time to start meeting earlier than session time, in minutes')
-    parser.add_argument("--time_after", default=5, type=int, help='Scheduled end time of meeting after official session end, in minutes')
+    parser.add_argument('--schedule', action="store_true",
+                        help='schedule zoom meetings for sessions in sheet')
+    parser.add_argument('--delete', action="store_true",
+                        help='delete specified meeting')
+    parser.add_argument('--get', action="store_true",
+                        help='get info of specified meeting')
+    parser.add_argument('--start_url', action="store_true",
+                        help='retrieve start url of a meeting')
+
+    parser.add_argument("--max_n_schedules", default=200, type=int,
+                        help='Maximum number of meetings to schedule in a call')
+    parser.add_argument("--time_before", default=15, type=int,
+                        help='Time to start meeting earlier than session time, in minutes')
+    parser.add_argument("--time_after", default=5, type=int,
+                        help='Scheduled end time of meeting after official session end, in minutes')
 
     parser.add_argument("--id", default=None, type=str, help='meeting id')
-    parser.add_argument("--event_prefix", default=None, type=str, help='Event prefix to filter for')
-    parser.add_argument("--track", default=None, type=str, help='Track id to filter for')
-    parser.add_argument("--disable_dialin", action="store_true", default=True, help='Enable dial-in for meetings (requires Pro account)')
+    parser.add_argument("--event_prefix", default=None,
+                        type=str, help='Event prefix to filter for')
+    parser.add_argument("--track", default=None, type=str,
+                        help='Track id to filter for')
+    parser.add_argument("--disable_dialin", action="store_true", default=True,
+                        help='Enable dial-in for meetings (requires Pro account)')
 
     args = parser.parse_args()
 
