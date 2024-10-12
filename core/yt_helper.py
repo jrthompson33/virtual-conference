@@ -182,7 +182,7 @@ class YouTubeHelper:
 
         return None
 
-    def update_video(self, video_id : str, title : str, description : str, privacy : str = "unlisted"):
+    def update_video(self, enable_captions: bool, video_id : str, title : str, description : str, privacy : str = "unlisted"):
         #print("Updating\ntitle = {}\nvideo = {}".format(title, video_id))
         title = self.make_youtube_title(title)
         description = self.make_youtube_description(description)
@@ -190,6 +190,21 @@ class YouTubeHelper:
             part="id,snippet,status",
             body = {
                 "id": video_id,
+                "contentDetails": {
+                    "closedCaptionsType": "closedCaptionsEmbedded" if enable_captions else "closedCaptionsDisabled",
+                    "enableContentEncryption": False,
+                    "enableDvr": True,
+                    # Note: YouTube requires you to have 1k subscribers and 4k public watch hours
+                    # to enable embedding live streams. You can set this to true if your account
+                    # meets this requirement and you've enabled embedding live streams
+                    "enableEmbed": True,
+                    # We must use a low latency only stream if using live captions
+                    "latencyPreference": "normal",
+                    "monitorStream": {
+                        "enableMonitorStream": False,
+                        "broadcastStreamDelayMs": 0
+                    }
+                },
                 "snippet": {
                     "title": title,
                     "description": description,
@@ -198,6 +213,14 @@ class YouTubeHelper:
                 "status": {
                     "selfDeclaredMadeForKids": False,
                     "embeddable": True,
+                    "privacyStatus": privacy
+                },
+                "snippet": {
+                    "title": title,
+                    "scheduledStartTime": start_time.astimezone(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.0Z"),
+                    "description": description,
+                },
+                "status": {
                     "privacyStatus": privacy
                 }
             }
@@ -228,7 +251,8 @@ class YouTubeHelper:
             body={
                 "id": broadcast_id,
                 "contentDetails": {
-                    "closedCaptionsType": "closedCaptionsHttpPost",
+                    "closedCaptionsType": "closedCaptionsEmbedded",
+                    "enableClosedCaptions": True,
                     "enableContentEncryption": False,
                     "enableDvr": True,
                     # Note: YouTube requires you to have 1k subscribers and 4k public watch hours
@@ -267,12 +291,12 @@ class YouTubeHelper:
                 ).execute()
         return resp
 
-    def schedule_broadcast(self, title : str, description : str, start_time : datetime, enable_captions : bool = False,
+    def schedule_broadcast(self, title : str, description : str, start_time : datetime, enable_captions : bool = True,
                            thumbnail_png_bytes : io.BytesIO = None, thumbnail_path : str = None, 
                            enable_auto_start : bool = False, privacy : str = "unlisted"):
         """Schedule a broadcast
 
-        enable_captions: if True, "closedCaptionsHttpPost" will be used and latencyPreference will be set to "low" instead of "ultraLow"
+        enable_captions: if True, "closedCaptionsEmbedded" will be used and latencyPreference will be set to "normal" instead of "low"
         thumbnail_png_bytes: optional thumbnail image provided as rendered image bytes
         thumbnail_path: optional thumbnail image, path to file
         enable_auto_start: if True broadcast will start streaming automatically by scheduled time
@@ -284,7 +308,8 @@ class YouTubeHelper:
             part="id,snippet,contentDetails,status",
             body={
                 "contentDetails": {
-                    "closedCaptionsType": "closedCaptionsHttpPost" if enable_captions else "closedCaptionsDisabled",
+                    "closedCaptionsType": "closedCaptionsEmbedded" if enable_captions else "closedCaptionsDisabled",
+                    "enableClosedCaptions": enable_captions,
                     "enableContentEncryption": False,
                     "enableDvr": True,
                     # Note: YouTube requires you to have 1k subscribers and 4k public watch hours
@@ -296,7 +321,7 @@ class YouTubeHelper:
                     "recordFromStart": True,
                     "startWithSlate": False,
                     # We must use a low latency only stream if using live captions
-                    "latencyPreference": "normal",
+                    "latencyPreference": "normal" if enable_captions else "low",
                     "monitorStream": {
                         "enableMonitorStream": False,
                         "broadcastStreamDelayMs": 0
@@ -380,7 +405,7 @@ class YouTubeHelper:
         broadcast_status = self.get_broadcast_status(broadcast_id)
         if broadcast_status == "complete":
             print(f"Broadcast {broadcast_id} has already been made complete, skipping redundant transition")
-            return
+            return 
 
         if broadcast_status != "live":
             print(f"Broadcast {broadcast_id} is {broadcast_status}, not live, cannot make complete")

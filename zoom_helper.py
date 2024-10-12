@@ -345,7 +345,7 @@ def update_session_zoom_livestreams(args: argparse.Namespace):
     for sk in streamkeys:
         streamkeys_dict[sk["Track"]] = sk
 
-        print(f"{len(sessions)} sessions loaded")
+    print(f"{len(sessions)} sessions loaded")
     # Filter for day of the week e.g. mon1, tue1 for 1 block on Monday or Tuesday
     if args.dow:
         sessions = list(
@@ -446,9 +446,9 @@ if __name__ == '__main__':
                         help='get info of specified meeting')
     parser.add_argument('--update_livestream', action="store_true",
                         help='update the livestream for all sessions based on streamkeys to YouTube')
-    parser.add_argument('--start-livestream', action="store_true",
+    parser.add_argument('--start_livestream', action="store_true",
                         help="update status of livestreams to start and use embedded captions")
-    parser.add_argument('--stop-livestream', action="store_true",
+    parser.add_argument('--stop_livestream', action="store_true",
                         help="update status of livestreams to stop")
     parser.add_argument('--start_url', action="store_true",
                         help='retrieve start url of a meeting')
@@ -481,4 +481,9 @@ if __name__ == '__main__':
         resp = get_meeting(Authentication(), args.id)
         print(json.dumps(resp, indent=4))
     elif args.update_livestream:
-        update_session_zoom_livestreams(Authentication())
+        update_session_zoom_livestreams(args)
+    elif args.start_livestream:
+        start_livestreams(args)
+    elif args.stop_livestream:
+        stop_livestreams(args)
+    

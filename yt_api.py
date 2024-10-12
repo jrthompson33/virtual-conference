@@ -68,8 +68,8 @@ def stop_and_unbind_broadcasts(yt: YouTubeHelper, args: argparse.Namespace):
     broadcasts.load_sheet("Broadcasts")
     data = broadcasts.data
     print(f"{len(data)} broadcasts loaded")
-    data = list(filter(lambda d: d["Video ID"] and len(
-        d["Video ID"].strip()) > 0 and d["Stream Bound"] == "y", data))
+    # data = list(filter(lambda d: d["Video ID"] and len(
+    #     d["Video ID"].strip()) > 0 and d["Stream Bound"] == "y", data))
     if args.dow:
         data = list(filter(lambda d: d["Day of Week"] == args.dow, data))
 
@@ -121,8 +121,8 @@ def start_broadcasts(yt: YouTubeHelper, args: argparse.Namespace):
     broadcasts.load_sheet("Broadcasts")
     data = broadcasts.data
     print(f"{len(data)} broadcasts loaded")
-    data = list(filter(lambda d: d["Video ID"] and len(
-        d["Video ID"].strip()) > 0 and d["Stream Bound"] == "y", data))
+    # data = list(filter(lambda d: d["Video ID"] and len(
+    #     d["Video ID"].strip()) > 0 and d["Stream Bound"] == "y", data))
     if args.dow and len(args.dow.strip()) > 0:
         data = list(filter(lambda d: d["Day of Week"] == args.dow, data))
 
