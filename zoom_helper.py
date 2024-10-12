@@ -241,8 +241,6 @@ def schedule_zoom_meeting(headers: Any, title: str, password: str, start: dateti
 def schedule_meetings(args: argparse.Namespace):
     """Schedule meetings based on Sessions sheet in Data spreadsheet
     """
-    """Schedule meetings based on Sessions sheet in Data spreadsheet
-    """
     auth = Authentication()
     headers = get_headers_with_access(auth)
 
@@ -272,6 +270,10 @@ def schedule_meetings(args: argparse.Namespace):
     # Filter for args track id
     if args.track and len(args.track) > 0:
         sessions = list(filter(lambda it: it["Track"] == args.track, sessions))
+    # Filter for day of the week e.g. mon1, tue1 for 1 block on Monday or Tuesday
+    if args.dow:
+        sessions = list(
+            filter(lambda it: it["Day of Week"] == args.dow, sessions))
 
     num_to_schedule = len(sessions)
     if num_to_schedule > args.max_n_schedules:
@@ -331,7 +333,8 @@ def update_zoom_meeting_livestream(auth: Authentication, meeting_id: int, page_u
     return response
 
 
-def update_session_zoom_livestreams(auth: Authentication):
+def update_session_zoom_livestreams(args: argparse.Namespace):
+    auth = Authentication()
     session_sheet = GoogleSheets()
     session_sheet.load_sheet("Sessions")
     sessions = session_sheet.data
@@ -341,6 +344,19 @@ def update_session_zoom_livestreams(auth: Authentication):
     streamkeys_dict = dict()
     for sk in streamkeys:
         streamkeys_dict[sk["Track"]] = sk
+
+        print(f"{len(sessions)} sessions loaded")
+    # Filter for day of the week e.g. mon1, tue1 for 1 block on Monday or Tuesday
+    if args.dow:
+        sessions = list(
+            filter(lambda it: it["Day of Week"] == args.dow, sessions))
+    # Filter for args event_prefix
+    if args.event_prefix and len(args.event_prefix) > 0:
+        sessions = list(
+            filter(lambda it: it["Event Prefix"] == args.event_prefix, sessions))
+    # Filter for args track id
+    if args.track and len(args.track) > 0:
+        sessions = list(filter(lambda it: it["Track"] == args.track, sessions))
 
     print(f"Updating livestream for {len(sessions)} Zoom Meetings")
     success = 0
@@ -360,6 +376,66 @@ def update_session_zoom_livestreams(auth: Authentication):
     print(f"{success} out of {len(sessions)} updated")
 
 
+def update_livestream_status(auth: Authentication, meeting_id: int, action: str, layout: str, close_caption: str):
+    livestream_info = {
+        # "start" - Start a livestream. "stop" - Stop an ongoing livestream. "mode" - Control a livestream view at runtime.
+        "action": action,
+        "settings": {
+            #   The layout of the meeting's livestream. Use this field if you pass the start or mode value for the action field.
+            # follow_host - Follow host view. gallery_view - Gallery view. speaker_view - Speaker view.
+            "layout": layout,
+            # burnt-in - Burnt in captions. embedded - Embedded captions. off - Turn off captions.
+            "close_caption": close_caption
+        }
+    }
+
+    headers = get_headers_with_access(auth)
+    response = requests.patch(f"https://api.zoom.us/v2/meetings/{
+                              meeting_id}/livestream/status", headers=headers, json=livestream_info)
+    return response
+
+
+def start_livestreams(args: argparse.Namespace):
+    update_status_for_livestreams(args, "start")
+
+
+def stop_livestreams(args: argparse.Namespace):
+    update_status_for_livestreams(args, "stop")
+
+
+def update_status_for_livestreams(args: argparse.Namespace, action: str):
+    auth = Authentication()
+    session_sheet = GoogleSheets()
+    session_sheet.load_sheet("Sessions")
+    sessions = session_sheet.data
+
+    print(f"{len(sessions)} sessions loaded")
+    # Filter for day of the week e.g. mon1, tue1 for 1 block on Monday or Tuesday
+    if args.dow:
+        sessions = list(
+            filter(lambda it: it["Day of Week"] == args.dow, sessions))
+    # Filter for args event_prefix
+    if args.event_prefix and len(args.event_prefix) > 0:
+        sessions = list(
+            filter(lambda it: it["Event Prefix"] == args.event_prefix, sessions))
+    # Filter for args track id
+    if args.track and len(args.track) > 0:
+        sessions = list(filter(lambda it: it["Track"] == args.track, sessions))
+
+    print(f"Updating livestream status for {len(sessions)} Zoom Meetings")
+    success = 0
+    for s in sessions:
+        id = s["Zoom Meeting ID"]
+        resp = update_livestream_status(
+            auth, id, action, "follow_host", "embedded")
+        if resp.status_code != 204:
+            print(resp.status_code, resp.text)
+            print(f"{id} meeting not updated")
+        else:
+            success += 1
+    print(f"{success} out of {len(sessions)} updated")
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Schedule zoom meetings')
     parser.add_argument('--schedule', action="store_true",
@@ -370,6 +446,10 @@ if __name__ == '__main__':
                         help='get info of specified meeting')
     parser.add_argument('--update_livestream', action="store_true",
                         help='update the livestream for all sessions based on streamkeys to YouTube')
+    parser.add_argument('--start-livestream', action="store_true",
+                        help="update status of livestreams to start and use embedded captions")
+    parser.add_argument('--stop-livestream', action="store_true",
+                        help="update status of livestreams to stop")
     parser.add_argument('--start_url', action="store_true",
                         help='retrieve start url of a meeting')
 
@@ -381,6 +461,8 @@ if __name__ == '__main__':
                         help='Scheduled end time of meeting after official session end, in minutes')
 
     parser.add_argument("--id", default=None, type=str, help='meeting id')
+    parser.add_argument("--dow", default=None, type=str,
+                        help='Day of Week and Session Block Number (e.g., mon1 = Monday First Block, tue3 = Tuesday Third Block)')
     parser.add_argument("--event_prefix", default=None,
                         type=str, help='Event prefix to filter for')
     parser.add_argument("--track", default=None, type=str,
