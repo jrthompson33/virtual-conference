@@ -15,28 +15,30 @@ import core.auth as conf_auth
 RETRIABLE_STATUS_CODES = [500, 502, 503, 504]
 
 RETRIABLE_EXCEPTIONS = (httplib2.HttpLib2Error, IOError, http.client.NotConnected,
-        http.client.IncompleteRead, http.client.ImproperConnectionState,
-        http.client.CannotSendRequest, http.client.CannotSendHeader,
-        http.client.ResponseNotReady, http.client.BadStatusLine)
+                        http.client.IncompleteRead, http.client.ImproperConnectionState,
+                        http.client.CannotSendRequest, http.client.CannotSendHeader,
+                        http.client.ResponseNotReady, http.client.BadStatusLine)
+
 
 class YouTubeHelper:
     def __init__(self):
         """YouTube helper class to perform various actions, will immediately authenticate upon class instantiation
         """
-        self.auth = conf_auth.Authentication(youtube=True, use_pickled_credentials=True)
+        self.auth = conf_auth.Authentication(
+            youtube=True, use_pickled_credentials=True)
 
-    def make_youtube_title(self, title : str) -> str:
+    def make_youtube_title(self, title: str) -> str:
         """Make sure title is valid for Youtube: <= 100 characters and no '<' or '>' symbols
         """
         if title is None:
             return None
-            
+
         title = title.replace("<", " ").replace(">", " ")
         if len(title) > 100:
             title = title[0:99]
         return title
 
-    def make_youtube_description(self, description : str) -> str:
+    def make_youtube_description(self, description: str) -> str:
         """Similar rules for the description as the title, but max length of 5000 characters
         """
         if description is None:
@@ -46,7 +48,7 @@ class YouTubeHelper:
             description = description[0:4999]
         return description
 
-    def create_playlist(self, title : str, desc : str = "", privacy : str = "unlisted"):
+    def create_playlist(self, title: str, desc: str = "", privacy: str = "unlisted"):
         """Create playlist.
 
         Returns something like {
@@ -100,41 +102,41 @@ class YouTubeHelper:
             }).execute()
         return resp
 
-    def add_video_to_playlist(self, playlist_id : str, video_id : str):
+    def add_video_to_playlist(self, playlist_id: str, video_id: str):
         """Add existing video to existing playlist
         """
         resp = self.auth.youtube.playlistItems().insert(
-                part="id,status,snippet",
-                body={
-                    "snippet": {
-                        "playlistId": playlist_id,
-                        "resourceId": {
-                            "kind": "youtube#video",
-                            "videoId": video_id
-                        }
+            part="id,status,snippet",
+            body={
+                "snippet": {
+                    "playlistId": playlist_id,
+                    "resourceId": {
+                        "kind": "youtube#video",
+                        "videoId": video_id
                     }
-                }).execute()
+                }
+            }).execute()
         return resp
-        
-    def set_thumbnail(self, video_id : str, path : str):
+
+    def set_thumbnail(self, video_id: str, path: str):
         """Upload image and set it as thumbnail for video
         """
         res = self.auth.youtube.thumbnails().set(
-                videoId=video_id,
-                media_body=MediaFileUpload(path)
-            ).execute()
+            videoId=video_id,
+            media_body=MediaFileUpload(path)
+        ).execute()
         return res
 
-    def upload_video(self, path : str, title : str, description : str):
+    def upload_video(self, path: str, title: str, description: str):
         title = self.make_youtube_title(title)
         description = self.make_youtube_description(description)
         upload_request = self.auth.youtube.videos().insert(
             part="id,status,snippet",
-            body = {
+            body={
                 "snippet": {
                     "title": title,
                     "description": description,
-                    "categoryId": 27 # Category 27 is "education"
+                    "categoryId": 27  # Category 27 is "education"
                 },
                 "status": {
                     "privacyStatus": "unlisted",
@@ -143,9 +145,9 @@ class YouTubeHelper:
                 }
             },
             # MediaFileUpload('cow.png', mimetype='image/png', chunksize=1024*1024, resumable=True)
-            #Depending on the platform you are working on, you may pass -1 as the
-            #chunksize, which indicates that the entire file should be uploaded in a single
-            #request.
+            # Depending on the platform you are working on, you may pass -1 as the
+            # chunksize, which indicates that the entire file should be uploaded in a single
+            # request.
             media_body=MediaFileUpload(path, chunksize=-1, resumable=True)
         )
 
@@ -166,7 +168,8 @@ class YouTubeHelper:
                         return None
             except HttpError as e:
                 if e.resp.status in RETRIABLE_STATUS_CODES:
-                    error = f"Retriable HTTP error {e.resp.status}: {e.content}"
+                    error = f"Retriable HTTP error {
+                        e.resp.status}: {e.content}"
                 else:
                     raise e
             except RETRIABLE_EXCEPTIONS as e:
@@ -182,39 +185,14 @@ class YouTubeHelper:
 
         return None
 
-    def update_video(self, enable_captions: bool, video_id : str, title : str, description : str, privacy : str = "unlisted"):
-        #print("Updating\ntitle = {}\nvideo = {}".format(title, video_id))
+    def update_video(self, enable_captions: bool, video_id: str, title: str, description: str, privacy: str = "unlisted"):
+        # print("Updating\ntitle = {}\nvideo = {}".format(title, video_id))
         title = self.make_youtube_title(title)
         description = self.make_youtube_description(description)
         resp = self.auth.youtube.videos().update(
             part="id,snippet,status",
-            body = {
+            body={
                 "id": video_id,
-                "contentDetails": {
-                    "closedCaptionsType": "closedCaptionsEmbedded" if enable_captions else "closedCaptionsDisabled",
-                    "enableContentEncryption": False,
-                    "enableDvr": True,
-                    # Note: YouTube requires you to have 1k subscribers and 4k public watch hours
-                    # to enable embedding live streams. You can set this to true if your account
-                    # meets this requirement and you've enabled embedding live streams
-                    "enableEmbed": True,
-                    # We must use a low latency only stream if using live captions
-                    "latencyPreference": "normal",
-                    "monitorStream": {
-                        "enableMonitorStream": False,
-                        "broadcastStreamDelayMs": 0
-                    }
-                },
-                "snippet": {
-                    "title": title,
-                    "description": description,
-                    "categoryId": 27 # Category 27 is "education"
-                },
-                "status": {
-                    "selfDeclaredMadeForKids": False,
-                    "embeddable": True,
-                    "privacyStatus": privacy
-                },
                 "snippet": {
                     "title": title,
                     "scheduledStartTime": start_time.astimezone(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.0Z"),
@@ -227,7 +205,7 @@ class YouTubeHelper:
         ).execute()
         return resp
 
-    def set_video_embeddable(self, video_id : str, privacy : str = "unlisted"):
+    def set_video_embeddable(self, video_id: str, privacy: str = "unlisted"):
         """Make sure that 'embeddable' is set to True of specified video
         (e.g., after live broadcast has stoppped)
         """
@@ -243,7 +221,7 @@ class YouTubeHelper:
         ).execute()
         return resp
 
-    def disable_autostart(self, broadcast_id : str):
+    def disable_autostart(self, broadcast_id: str):
         """Make sure that auto start streaming is disabled
         """
         resp = self.auth.youtube.liveBroadcasts().update(
@@ -274,26 +252,76 @@ class YouTubeHelper:
         ).execute()
         return resp
 
-    def upload_subtitles(self, video_id : str, subtitles_path : str, name : str = "English Subtitles",
-                        language : str = "en-us"):
+    def upload_subtitles(self, video_id: str, subtitles_path: str, name: str = "English Subtitles",
+                         language: str = "en-us"):
         """Upload subtitles file to specified video
         """
         resp = self.auth.youtube.captions().insert(
-                    part="id,snippet",
-                    body={
-                        "snippet": {
-                            "videoId": video_id,
-                            "language": language,
-                            "name": name
-                        }
-                    },
-                    media_body=MediaFileUpload(subtitles_path)
-                ).execute()
+            part="id,snippet",
+            body={
+                "snippet": {
+                    "videoId": video_id,
+                    "language": language,
+                    "name": name
+                }
+            },
+            media_body=MediaFileUpload(subtitles_path)
+        ).execute()
         return resp
 
-    def schedule_broadcast(self, title : str, description : str, start_time : datetime, enable_captions : bool = True,
-                           thumbnail_png_bytes : io.BytesIO = None, thumbnail_path : str = None, 
-                           enable_auto_start : bool = False, privacy : str = "unlisted"):
+    def update_broadcast(self, broadcast_id: str, start_time: datetime, enable_captions: bool = True, thumbnail_png_bytes: io.BytesIO = None, thumbnail_path: str = None,
+                         enable_auto_start: bool = False, privacy: str = "unlisted"):
+        # https://developers.google.com/youtube/v3/live/docs/liveBroadcasts#resource
+        broadcast_info = self.auth.youtube.liveBroadcasts().update(
+            part="id,snippet,contentDetails,status",
+            body={
+                "id": broadcast_id,
+                "contentDetails": {
+                    "closedCaptionsType": "closedCaptionsEmbedded" if enable_captions else "closedCaptionsDisabled",
+                    "enableContentEncryption": False,
+                    "enableDvr": True,
+                    # Note: YouTube requires you to have 1k subscribers and 4k public watch hours
+                    # to enable embedding live streams. You can set this to true if your account
+                    # meets this requirement and you've enabled embedding live streams
+                    "enableEmbed": True,
+                    "enableAutoStart": enable_auto_start,
+                    "enableAutoEnd": False,
+                    "recordFromStart": True,
+                    "startWithSlate": False,
+                    # We must use a low latency only stream if using live captions
+                    "latencyPreference": "normal" if enable_captions else "low",
+                    "monitorStream": {
+                        "enableMonitorStream": False,
+                        "broadcastStreamDelayMs": 0
+                    }
+                },
+                "snippet": {
+                    "scheduledStartTime": start_time.astimezone(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.0Z"),
+                },
+                "status": {
+                    "privacyStatus": privacy
+                }
+            }
+        ).execute()
+
+        # Render the thumbnail for the session and upload it
+        if thumbnail_png_bytes:
+            self.auth.youtube.thumbnails().set(
+                videoId=broadcast_info["id"],
+                media_body=MediaIoBaseUpload(
+                    thumbnail_png_bytes, mimetype="image/png")
+            ).execute()
+        elif thumbnail_path:
+            self.auth.youtube.thumbnails().set(
+                videoId=broadcast_info["id"],
+                media_body=MediaFileUpload(thumbnail_path)
+            ).execute()
+
+        return broadcast_info
+
+    def schedule_broadcast(self, title: str, description: str, start_time: datetime, enable_captions: bool = True,
+                           thumbnail_png_bytes: io.BytesIO = None, thumbnail_path: str = None,
+                           enable_auto_start: bool = False, privacy: str = "unlisted"):
         """Schedule a broadcast
 
         enable_captions: if True, "closedCaptionsEmbedded" will be used and latencyPreference will be set to "normal" instead of "low"
@@ -355,7 +383,8 @@ class YouTubeHelper:
         if thumbnail_png_bytes:
             self.auth.youtube.thumbnails().set(
                 videoId=broadcast_info["id"],
-                media_body=MediaIoBaseUpload(thumbnail_png_bytes, mimetype="image/png")
+                media_body=MediaIoBaseUpload(
+                    thumbnail_png_bytes, mimetype="image/png")
             ).execute()
         elif thumbnail_path:
             self.auth.youtube.thumbnails().set(
@@ -363,17 +392,17 @@ class YouTubeHelper:
                 media_body=MediaFileUpload(thumbnail_path)
             ).execute()
 
-
         return broadcast_info
 
-    def make_broadcast_live(self, broadcast_id : str, stream_key_id : str):
+    def make_broadcast_live(self, broadcast_id: str, stream_key_id: str):
         """transition broadcast to live, given that stream was already bound to it and is healthy
         """
         broadcast_status = self.get_broadcast_status(broadcast_id)
         # Broadcast could be in the ready state (configured and a stream key was bound),
         # or in the created state (configured but no stream key attached yet).
         if broadcast_status != "ready" and broadcast_status != "created":
-            print(f"Broadcast {broadcast_id} is in state {broadcast_status}, and cannot be (re-)made live")
+            print(f"Broadcast {broadcast_id} is in state {
+                  broadcast_status}, and cannot be (re-)made live")
             return
 
         # Check the status of the live stream to make sure it's running before we make it live
@@ -381,42 +410,45 @@ class YouTubeHelper:
         stream_status, stream_health = self.get_stream_status(stream_key_id)
         if stream_status != "active":
             print(f"Stream (key {stream_key_id}) for" +
-                f"broadcast {broadcast_id} is not active (currently {stream_status})." +
-                "will wait 5s longer for data and retry")
+                  f"broadcast {broadcast_id} is not active (currently {stream_status})." +
+                  "will wait 5s longer for data and retry")
             time.sleep(5)
             retries = retries + 1
             if retries >= 2:
-                print(f"Retried {retries} times and zoom stream is still not live!?")
+                print(
+                    f"Retried {retries} times and zoom stream is still not live!?")
 
         if stream_health != "good":
-            print(f"WARNING: Stream on computer (key {stream_key_id}) is active, but not healthy. Health status is {stream_health}")
+            print(f"WARNING: Stream on computer (key {
+                  stream_key_id}) is active, but not healthy. Health status is {stream_health}")
 
         # Make the broadcast live. Record the start/end times of this call in case
         # We need to resync the stream
         start_transition_call = int(time.time())
         res = self.set_broadcast_status(broadcast_id, "live")
         end_transition_call = int(time.time())
-        #self.record_stream_update_timestamp([start_transition_call, end_transition_call])
+        # self.record_stream_update_timestamp([start_transition_call, end_transition_call])
         return res
 
-    def stop_and_unbind_broadcast(self, broadcast_id : str):
+    def stop_and_unbind_broadcast(self, broadcast_id: str):
         """stop broadcast, make video embeddable, and unbind stream key from it
         """
         broadcast_status = self.get_broadcast_status(broadcast_id)
         if broadcast_status == "complete":
-            print(f"Broadcast {broadcast_id} has already been made complete, skipping redundant transition")
-            return 
+            print(f"Broadcast {
+                  broadcast_id} has already been made complete, skipping redundant transition")
+            return
 
         if broadcast_status != "live":
-            print(f"Broadcast {broadcast_id} is {broadcast_status}, not live, cannot make complete")
+            print(f"Broadcast {broadcast_id} is {
+                  broadcast_status}, not live, cannot make complete")
             return
 
         res = self.set_broadcast_status(broadcast_id, "complete")
-        #unbind stream key from broadcast for reuse
+        # unbind stream key from broadcast for reuse
         self.bind_stream_to_broadcast(None, broadcast_id)
         self.set_video_embeddable(broadcast_id)
         return res
-
 
     def get_broadcasts(self) -> List:
         """get all broadcasts of associated channel (mine)
@@ -464,7 +496,7 @@ class YouTubeHelper:
                 part="id,snippet",
                 maxResults=50,
                 forMine=True,
-                type = "video",
+                type="video",
                 pageToken=page_token
             ).execute()
             all_items += items["items"]
@@ -491,25 +523,25 @@ class YouTubeHelper:
             page_token = items["nextPageToken"]
         return all_items
 
-    def get_video(self, video_id : str):
+    def get_video(self, video_id: str):
         """get details of a specific video by id
         """
         resp = self.auth.youtube.videos().list(
-                part="id,snippet,contentDetails,fileDetails,liveStreamingDetails,player,processingDetails,recordingDetails,statistics,status,suggestions,topicDetails",
-                id = video_id
-            ).execute()
+            part="id,snippet,contentDetails,fileDetails,liveStreamingDetails,player,processingDetails,recordingDetails,statistics,status,suggestions,topicDetails",
+            id=video_id
+        ).execute()
         if resp['items'] is None or len(resp['items']) != 1:
             return None
         return resp['items'][0]
 
-    def get_playlist(self, playlist_id : str):
+    def get_playlist(self, playlist_id: str):
         """get specific playlist
         """
         resp = self.auth.youtube.playlists().list(
-                part="snippet,contentDetails",
-                maxResults=50,
-                id=playlist_id
-            ).execute()
+            part="snippet,contentDetails",
+            maxResults=50,
+            id=playlist_id
+        ).execute()
         if resp['items'] is None or len(resp['items']) != 1:
             return None
         return resp['items'][0]
@@ -574,7 +606,7 @@ class YouTubeHelper:
             page_token = playlists["nextPageToken"]
         return all_playlists
 
-    def get_playlist_items(self, playlist_id : str, only_first_page : bool = False) -> List:
+    def get_playlist_items(self, playlist_id: str, only_first_page: bool = False) -> List:
         """get all items of a playlists
         returns array of the like [
                 {
@@ -631,7 +663,7 @@ class YouTubeHelper:
             page_token = items["nextPageToken"]
         return all_items
 
-    def delete_playlist_item(self, playlist_item_id : str):            
+    def delete_playlist_item(self, playlist_item_id: str):
         """Delete specified playlist item
         """
         resp = self.auth.youtube.playlistItems().delete(id=playlist_item_id).execute()
@@ -676,13 +708,13 @@ class YouTubeHelper:
         for pl in yt_playlists:
             items = self.get_playlist_items(pl["id"])
             res_item = {
-                    "playlist": pl,
-                    "items": items
-                }
+                "playlist": pl,
+                "items": items
+            }
             res.append(res_item)
         return res
 
-    def get_stream_status(self, stream_key_id : str):
+    def get_stream_status(self, stream_key_id: str):
         """get streamStatus ("active", "created", "error", "inactive", "ready"), healthStatus ("good", "ok", "bad", "noData") of specified stream
         """
         response = self.auth.youtube.liveStreams().list(
@@ -691,7 +723,7 @@ class YouTubeHelper:
         ).execute()
         return response["items"][0]["status"]["streamStatus"], response["items"][0]["status"]["healthStatus"]["status"]
 
-    def get_broadcast_status(self, broadcast_id : str):
+    def get_broadcast_status(self, broadcast_id: str):
         """return broadcast lifeCycleStatus of specified broadcast, e.g. "ready", "live" or "complete" or "testing"
         """
         response = self.auth.youtube.liveBroadcasts().list(
@@ -699,8 +731,8 @@ class YouTubeHelper:
             part="status"
         ).execute()
         return response["items"][0]["status"]["lifeCycleStatus"]
-        
-    def set_broadcast_status(self, broadcast_id : str, status : str):
+
+    def set_broadcast_status(self, broadcast_id: str, status: str):
         """set status of specified broadcast, e.g. to "live" or "complete" or "testing"
         """
         resp = self.auth.youtube.liveBroadcasts().transition(
@@ -710,7 +742,7 @@ class YouTubeHelper:
         ).execute()
         return resp
 
-    def get_broadcast_statistics(self, broadcast_id : str):
+    def get_broadcast_statistics(self, broadcast_id: str):
         """return liveStreamingDetails of specified broadcast
         """
         response = self.auth.youtube.videos().list(
@@ -719,7 +751,7 @@ class YouTubeHelper:
         ).execute()
         return response["items"][0]["liveStreamingDetails"]
 
-    def bind_stream_to_broadcast(self, stream_key_id : str, broadcast_id : str):
+    def bind_stream_to_broadcast(self, stream_key_id: str, broadcast_id: str):
         """attach specified stream to specified broadcast or remove it by setting stream_key_id to None
         """
         resp = self.auth.youtube.liveBroadcasts().bind(

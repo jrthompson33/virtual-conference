@@ -171,6 +171,50 @@ def set_recordings_thumbs(yt: YouTubeHelper, args: argparse.Namespace):
             print("\r\nsaving failed: ")
             print(ex)
 
+
+def update_broadcasts(yt: YouTubeHelper, args: argparse.Namespace):
+    """update broadcasts from sheet, possibly filtered by dow = Day of Week
+    """
+    broadcasts = GoogleSheets()
+    broadcasts.load_sheet("Broadcasts")
+    data = broadcasts.data
+    print(f"{len(data)} broadcasts loaded")
+    if args.dow:
+        data = list(filter(lambda d: d["Day of Week"] == args.dow, data))
+
+    num_to_update = len(data)
+
+    print(f"{num_to_update} broadcasts will be scheduled")
+    for broadcast in data:
+        l_id: str = broadcast["Livestream ID"]
+        title: str = broadcast["Title"]
+        broadcast_id: str = broadcast["Video ID"]
+        thumbnail_path: str = broadcast["Thumbnail File Name"]
+        use_thumbnail: bool = False
+        if thumbnail_path and len(thumbnail_path) > 0:
+            if args.path and len(args.path) > 0:
+                thumbnail_path = os.path.join(args.path, thumbnail_path)
+            if os.path.isfile(thumbnail_path):
+                use_thumbnail = True
+            else:
+                print(f"MISSING thumbnail: {thumbnail_path}, aborting...")
+                return
+
+        start_dt = broadcast["Start DateTime"]
+        print(f"\r\nschedule broadcast {l_id} - {title}...")
+        if not start_dt or not start_dt.endswith("Z"):
+            print(
+                f"ERROR: invalid start date time provided, has to be in ISO format, UTC")
+            continue
+        dt = datetime.fromisoformat(start_dt.replace('Z', '+00:00'))
+
+        res = yt.update_broadcast(broadcast_id, dt, enable_captions=True,
+                                  thumbnail_path=thumbnail_path if use_thumbnail else None,
+                                  enable_auto_start=False)
+        print(json.dumps(res))
+        num_to_update += 1
+
+
 def schedule_broadcasts(yt: YouTubeHelper, args: argparse.Namespace):
     """schedule broadcasts from sheet, possibly filtered by dow = Day of Week
     """
@@ -251,7 +295,8 @@ def populate_ffpl_sheet(args: argparse.Namespace):
         item["FF P Source ID"] = src_id
         item["FF P ID"] = ""
         item["FF P Title"] = f"{ev_title} - Fast Forwards | {args.venue}"
-        item["FF P Description"] = f"Fast forwards for {ev_title.lower()} at {args.venue}"
+        item["FF P Description"] = f"Fast forwards for {ev_title.lower()} at {
+            args.venue}"
         if not src_id in playlists.data_by_index:
             playlists.data.append(item)
             playlists.data_by_index[src_id] = item
@@ -322,7 +367,8 @@ def populate_pl_sheet(args: argparse.Namespace):
         item["P Source ID"] = src_id
         item["P ID"] = ""
         item["P Title"] = f"{ev_title} - Presentations | {args.venue}"
-        item["P Description"] = f"Pre-recorded presentations for {ev_title.lower()} at {args.venue}"
+        item["P Description"] = f"Pre-recorded presentations for {ev_title.lower()} at {
+            args.venue}"
         if not src_id in playlists.data_by_index:
             playlists.data.append(item)
             playlists.data_by_index[src_id] = item
@@ -358,7 +404,8 @@ def populate_pl_sheet(args: argparse.Namespace):
 
             s_title = s["Session Title"]
             title = f"{s_title} - Presentations | {args.venue}"
-            desc = f"Pre-recorded presentations for session '{s_title}' at {args.venue}"
+            desc = f"Pre-recorded presentations for session '{
+                s_title}' at {args.venue}"
             item = {}
             item["P Source ID"] = src_id
             item["P ID"] = ""
@@ -510,7 +557,8 @@ def upload_ff_videos(yt: YouTubeHelper, args: argparse.Namespace):
                 print(json.dumps(p_res))
                 if not p_row["FF P Link"] or len(p_row["FF P Link"]) == 0:
                     # we can now create proper watch link for playlist because we have uploaded first video
-                    p_row["FF P Link"] = f"https://www.youtube.com/watch?v={video_id}&list={playlist_id}"
+                    p_row["FF P Link"] = f"https://www.youtube.com/watch?v={
+                        video_id}&list={playlist_id}"
                     playlists.save()
 
             # set thumbnail
@@ -637,7 +685,8 @@ def upload_videos(yt: YouTubeHelper, args: argparse.Namespace):
                 print(json.dumps(p_res))
                 if not p_row["P Link"] or len(p_row["P Link"]) == 0:
                     # we can now create proper watch link for playlist because we have uploaded first video
-                    p_row["P Link"] = f"https://www.youtube.com/watch?v={video_id}&list={playlist_id}"
+                    p_row["P Link"] = f"https://www.youtube.com/watch?v={
+                        video_id}&list={playlist_id}"
                     playlists.save()
 
             # set thumbnail
@@ -779,8 +828,10 @@ def populate_videos(args: argparse.Namespace):
                         event_title = event_row["Event"]
                         break
             session_title = session["Session Title"]
-            title = f"{session_title} Session - Fast Forward | {args.venue}" if is_ff else f"{session_title} Session | {args.venue}"
-            desc = f"{event_title} Fast Forward for session {session_title}" if is_ff else f"{event_title}: {session_title}"
+            title = f"{session_title} Session - Fast Forward | {
+                args.venue}" if is_ff else f"{session_title} Session | {args.venue}"
+            desc = f"{event_title} Fast Forward for session {
+                session_title}" if is_ff else f"{event_title}: {session_title}"
             session_videos_dict[uid] = 1
         else:
             paper = papers.data_by_index[uid]
@@ -804,8 +855,10 @@ def populate_videos(args: argparse.Namespace):
             authors: str = paper["Authors"]
             if authors and len(authors) > 0:
                 authors = authors.replace("|", ", ")
-            title = f"{paper_title} - Fast Forward | {args.venue}" if is_ff else f"{paper_title} | {args.venue}"
-            desc = f"{event_title} Fast Forward: {paper_title}\r\nAuthors: {authors}" if is_ff else f"{event_title}: {paper_title}\r\nAuthors: {authors}"
+            title = f"{paper_title} - Fast Forward | {
+                args.venue}" if is_ff else f"{paper_title} | {args.venue}"
+            desc = f"{event_title} Fast Forward: {paper_title}\r\nAuthors: {
+                authors}" if is_ff else f"{event_title}: {paper_title}\r\nAuthors: {authors}"
 
         if event and len(event) > 0:
             if event in playlists.data_by_index:
@@ -937,8 +990,10 @@ def populate_videos_papersdb(args: argparse.Namespace):
         authors: str = paper["Authors"]
         if authors and len(authors) > 0:
             authors = authors.replace("|", ", ")
-        title = f"{paper_title} - Fast Forward | {args.venue}" if is_ff else f"{paper_title} | {args.venue}"
-        desc = f"{event_title} Fast Forward: {paper_title}\r\nAuthors: {authors}" if is_ff else f"{event_title}: {paper_title}\r\nAuthors: {authors}"
+        title = f"{paper_title} - Fast Forward | {
+            args.venue}" if is_ff else f"{paper_title} | {args.venue}"
+        desc = f"{event_title} Fast Forward: {paper_title}\r\nAuthors: {
+            authors}" if is_ff else f"{event_title}: {paper_title}\r\nAuthors: {authors}"
 
         if event and len(event) > 0:
             if event in playlists.data_by_index:
@@ -1031,6 +1086,8 @@ if __name__ == '__main__':
     parser.add_argument('--schedule_broadcast', help='schedule broadcast',
                         action='store_true', default=False)
     parser.add_argument('--schedule_broadcasts', help='schedule and bind broadcasts from sheet',
+                        action='store_true', default=False)
+    parser.add_argument('--update_broadcasts', help='update broadcasts from sheet',
                         action='store_true', default=False)
     parser.add_argument('--disable_autostart', help='disable autostart of broadcasts in sheet',
                         action='store_true', default=False)
@@ -1129,6 +1186,8 @@ if __name__ == '__main__':
         print(json.dumps(res))
     elif args.schedule_broadcasts:
         schedule_broadcasts(yt, args)
+    elif args.update_broadcasts:
+        update_broadcasts(yt, args)
     elif args.disable_autostart:
         disable_autostart_broadcasts(yt, args)
     elif args.upload_video:
