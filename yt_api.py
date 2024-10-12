@@ -7,7 +7,6 @@ import glob
 import argparse
 import json
 from typing import Any, Dict
-import urllib.request
 from datetime import datetime
 from core.auth import Authentication
 from core.pmu_helper import PmuHelper
@@ -39,7 +38,7 @@ def disable_autostart_broadcasts(yt: YouTubeHelper, args: argparse.Namespace):
 
 
 def unbind_broadcasts(yt: YouTubeHelper, args: argparse.Namespace):
-    """disable autostart of broadcasts from sheet, possibly filtered by dow = Day of Week
+    """unbind broadcasts from sheet, possibly filtered by dow = Day of Week
     """
     broadcasts = GoogleSheets()
     broadcasts.load_sheet("Broadcasts")
@@ -172,7 +171,6 @@ def set_recordings_thumbs(yt: YouTubeHelper, args: argparse.Namespace):
             print("\r\nsaving failed: ")
             print(ex)
 
-
 def schedule_broadcasts(yt: YouTubeHelper, args: argparse.Namespace):
     """schedule broadcasts from sheet, possibly filtered by dow = Day of Week
     """
@@ -209,7 +207,6 @@ def schedule_broadcasts(yt: YouTubeHelper, args: argparse.Namespace):
                 print(f"MISSING thumbnail: {thumbnail_path}, aborting...")
                 return
 
-        captions_enabled = broadcast["Captions Enabled"] == "y"
         start_dt = broadcast["Start DateTime"]
         print(f"\r\nschedule broadcast {l_id} - {title}...")
         if not start_dt or not start_dt.endswith("Z"):
@@ -219,7 +216,7 @@ def schedule_broadcasts(yt: YouTubeHelper, args: argparse.Namespace):
         dt = datetime.fromisoformat(start_dt.replace('Z', '+00:00'))
 
         res = yt.schedule_broadcast(title, description, dt,
-                                    enable_captions=captions_enabled,
+                                    enable_captions=True,
                                     thumbnail_path=thumbnail_path if use_thumbnail else None,
                                     enable_auto_start=False)
         print(json.dumps(res))
@@ -1084,7 +1081,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--description', help='description of item (e.g., video)', default=None)
     parser.add_argument(
-        '--start_time', help='start time of scheduled broadcast in the "%Y-%m-%d %H:%M" format in your local time zone', default=None)
+        '--start_time', help='start time of scheduled broadcast in the format in your local time zone', default=None)
     parser.add_argument(
         '--path', help='path to file or directory that should be uploaded, e.g. video file', default=None)
     parser.add_argument(
@@ -1092,7 +1089,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--venue', help='venue title for titles, descriptions', default="VIS 2023")
     parser.add_argument(
-        '--max_n_uploads', help='maximum number of video uploads', default=10, type=int)
+        '--max_n_uploads', help='maximum number of video uploads', default=100, type=int)
     parser.add_argument('--create_session_playlists', help='when populating video playlists also create playlists for sessions',
                         action='store_true', default=False)
     parser.add_argument('--only_v', help='when populating playlists only create playlists for events starting with v-',
