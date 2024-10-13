@@ -92,8 +92,8 @@ def bind_broadcasts(yt: YouTubeHelper, args: argparse.Namespace):
     broadcasts.load_sheet("Broadcasts")
     data = broadcasts.data
     print(f"{len(data)} broadcasts loaded")
-    data = list(filter(lambda d: d["Video ID"] and len(
-        d["Video ID"].strip()) > 0 and d["Stream Bound"] != "y", data))
+    # data = list(filter(lambda d: d["Video ID"] and len(
+    #     d["Video ID"].strip()) > 0 and d["Stream Bound"] != "y", data))
     if not args.dow or len(args.dow.strip()) == 0:
         print("--dow needs to be specified")
         return
@@ -171,6 +171,22 @@ def set_recordings_thumbs(yt: YouTubeHelper, args: argparse.Namespace):
             print("\r\nsaving failed: ")
             print(ex)
 
+def get_broadcasts(yt: YouTubeHelper, args: argparse.Namespace):
+    """update broadcasts from sheet, possibly filtered by dow = Day of Week
+    """
+    broadcasts = GoogleSheets()
+    broadcasts.load_sheet("Broadcasts")
+    data = broadcasts.data
+    print(f"{len(data)} broadcasts loaded")
+    if args.dow:
+        data = list(filter(lambda d: d["Day of Week"] == args.dow, data))
+
+    num_to_update = len(data)
+
+    print(f"{num_to_update} broadcasts will be retrieved")
+    ids = [b["Video ID"] for b in data]
+    print(ids)
+    return yt.get_broadcasts(ids)
 
 def update_broadcasts(yt: YouTubeHelper, args: argparse.Namespace):
     """update broadcasts from sheet, possibly filtered by dow = Day of Week
@@ -1178,7 +1194,7 @@ if __name__ == '__main__':
         pl = yt.create_playlist(args.title)
         print(json.dumps(pl))
     elif args.broadcasts:
-        res = yt.get_broadcasts()
+        res = get_broadcasts(yt, args)
         print(json.dumps(res))
     elif args.schedule_broadcast:
         dt = datetime.strptime(args.start_time, "%Y-%m-%d %H:%M")

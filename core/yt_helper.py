@@ -230,19 +230,11 @@ class YouTubeHelper:
                 "id": broadcast_id,
                 "contentDetails": {
                     "closedCaptionsType": "closedCaptionsEmbedded",
-                    "enableClosedCaptions": True,
                     "enableContentEncryption": False,
                     "enableDvr": True,
-                    # Note: YouTube requires you to have 1k subscribers and 4k public watch hours
-                    # to enable embedding live streams. You can set this to true if your account
-                    # meets this requirement and you've enabled embedding live streams
                     "enableEmbed": True,
                     "enableAutoStart": False,
                     "enableAutoEnd": False,
-                    "recordFromStart": True,
-                    "startWithSlate": False,
-                    # We must use a low latency only stream if using live captions
-                    "latencyPreference": "low",
                     "monitorStream": {
                         "enableMonitorStream": False,
                         "broadcastStreamDelayMs": 0
@@ -450,16 +442,18 @@ class YouTubeHelper:
         self.set_video_embeddable(broadcast_id)
         return res
 
-    def get_broadcasts(self) -> List:
+    def get_broadcasts(self, ids: List[str]) -> List:
         """get all broadcasts of associated channel (mine)
         """
         all_items = []
         page_token = None
+        id_str = ",".join(ids)
+        print(id_str)
         while True:
             items = self.auth.youtube.liveBroadcasts().list(
+                id=id_str,
                 part="id,snippet,contentDetails,status",
                 maxResults=50,
-                mine=True,
                 pageToken=page_token
             ).execute()
             all_items += items["items"]
