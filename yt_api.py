@@ -129,14 +129,17 @@ def start_broadcasts(yt: YouTubeHelper, args: argparse.Namespace):
     num_to_schedule = len(data)
     print(f"{num_to_schedule} broadcasts will be started")
     for broadcast in data:
-        l_id: str = broadcast["Livestream ID"]
-        title: str = broadcast["Title"]
-        stream_key_id = broadcast["Stream Key ID"]
-        broadcast_id = broadcast["Video ID"]
-        print(
-            f"\r\nstart broadcast {l_id} with id {broadcast_id} - {title}...")
-        res = yt.make_broadcast_live(broadcast_id, stream_key_id)
-        print(json.dumps(res))
+        try:
+            l_id: str = broadcast["Livestream ID"]
+            title: str = broadcast["Title"]
+            stream_key_id = broadcast["Stream Key ID"]
+            broadcast_id = broadcast["Video ID"]
+            print(
+                f"\r\nstart broadcast {l_id} with id {broadcast_id} - {title}...")
+            res = yt.make_broadcast_live(broadcast_id, stream_key_id)
+            print(json.dumps(res))
+        except Exception as e:
+            print(e)
 
 
 def set_recordings_thumbs(yt: YouTubeHelper, args: argparse.Namespace):
