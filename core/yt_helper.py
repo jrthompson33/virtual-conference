@@ -261,7 +261,7 @@ class YouTubeHelper:
         ).execute()
         return resp
 
-    def update_broadcast(self, broadcast_id: str, start_time: datetime, enable_captions: bool = True, thumbnail_png_bytes: io.BytesIO = None, thumbnail_path: str = None,
+    def update_broadcast(self, broadcast_id: str, start_time: datetime, end_time: datetime, enable_captions: bool = True, thumbnail_png_bytes: io.BytesIO = None, thumbnail_path: str = None,
                          enable_auto_start: bool = False, privacy: str = "unlisted"):
         # https://developers.google.com/youtube/v3/live/docs/liveBroadcasts#resource
         broadcast_info = self.auth.youtube.liveBroadcasts().update(
@@ -289,6 +289,7 @@ class YouTubeHelper:
                 },
                 "snippet": {
                     "scheduledStartTime": start_time.astimezone(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.0Z"),
+                    "scheduledEndTime": end_time.astimezone(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.0Z"),
                 },
                 "status": {
                     "privacyStatus": privacy

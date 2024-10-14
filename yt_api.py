@@ -222,9 +222,16 @@ def update_broadcasts(yt: YouTubeHelper, args: argparse.Namespace):
             print(
                 f"ERROR: invalid start date time provided, has to be in ISO format, UTC")
             continue
-        dt = datetime.fromisoformat(start_dt.replace('Z', '+00:00'))
+        start_dt = datetime.fromisoformat(start_dt.replace('Z', '+00:00'))
 
-        res = yt.update_broadcast(broadcast_id, dt, enable_captions=True,
+        end_dt = broadcast["End DateTime"]
+        if not end_dt or not end_dt.endswith("Z"):
+            print(
+                f"ERROR: invalid end date time provided, has to be in ISO format, UTC")
+            continue
+        end_dt = datetime.fromisoformat(end_dt.replace('Z', '+00:00'))
+
+        res = yt.update_broadcast(broadcast_id, start_dt, end_dt, enable_captions=True,
                                   thumbnail_path=thumbnail_path if use_thumbnail else None,
                                   enable_auto_start=False)
         print(json.dumps(res))
