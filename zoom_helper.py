@@ -316,7 +316,7 @@ def schedule_meetings(args: argparse.Namespace):
             print(f"Zoom Host not found for session {session_id}")
 
 
-def update_zoom_meeting_livestream(auth: Authentication, meeting_id: int, page_url: str, stream_key: str, stream_url: str, resolution: str = "1080p"):
+def update_zoom_meeting_livestream(auth: Authentication, meeting_id: int, page_url: str, stream_key: str, stream_url: str, resolution: str = "720p"):
     livestream_info = {
         # The live stream page URL.
         "page_url": page_url,
@@ -367,7 +367,7 @@ def update_session_zoom_livestreams(args: argparse.Namespace):
         stream_key = sk["Stream Key"]
         stream_url = sk["Ingestion URL"]
         resp = update_zoom_meeting_livestream(
-            auth, id, page_url, stream_key, stream_url, "1080p")
+            auth, id, page_url, stream_key, stream_url, "720p")
         if resp.status_code != 204:
             print(resp.status_code, resp.text)
             print(f"{id} meeting not updated")
