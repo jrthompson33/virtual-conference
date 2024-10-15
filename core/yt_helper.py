@@ -229,7 +229,8 @@ class YouTubeHelper:
             body={
                 "id": broadcast_id,
                 "contentDetails": {
-                    "closedCaptionsType": "closedCaptionsEmbedded",
+                    # "closedCaptionsType": "closedCaptionsEmbedded",
+                    # "enableClosedCap"
                     "enableContentEncryption": False,
                     "enableDvr": True,
                     "enableEmbed": True,
@@ -269,7 +270,7 @@ class YouTubeHelper:
             body={
                 "id": broadcast_id,
                 "contentDetails": {
-                    "closedCaptionsType": "closedCaptionsEmbedded" if enable_captions else "closedCaptionsDisabled",
+                    # "closedCaptionsType": "closedCaptionsEmbedded" if enable_captions else "closedCaptionsDisabled",
                     "enableContentEncryption": False,
                     "enableDvr": True,
                     # Note: YouTube requires you to have 1k subscribers and 4k public watch hours
@@ -329,8 +330,8 @@ class YouTubeHelper:
             part="id,snippet,contentDetails,status",
             body={
                 "contentDetails": {
-                    "closedCaptionsType": "closedCaptionsEmbedded" if enable_captions else "closedCaptionsDisabled",
-                    "enableClosedCaptions": enable_captions,
+                    # "closedCaptionsType": "closedCaptionsEmbedded" if enable_captions else "closedCaptionsDisabled",
+                    # "enableClosedCaptions": enable_captions,
                     "enableContentEncryption": False,
                     "enableDvr": True,
                     # Note: YouTube requires you to have 1k subscribers and 4k public watch hours

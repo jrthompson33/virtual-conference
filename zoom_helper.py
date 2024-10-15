@@ -422,8 +422,9 @@ def update_meetings(args: argparse.Namespace):
         end = end + timedelta(minutes=args.time_after)
         room = track["Room Name"]
         host = track["Zoom Host ID"]
+
         meeting_id = int(session["Zoom Meeting ID"])
-        password = generate_password()
+        password = session["Zoom Password"]
         event_name = events_dict[session["Event Prefix"]]
         agenda = f"Event: {event_name}\n Session: {
             session["Session Title"]}\n Program: https://ieeevis.org/year/2024/program/session_{session["Session ID"]}.html"
