@@ -137,7 +137,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--email_template', help='template to use for the email', default=None)
     parser.add_argument(
-        '--dow', help='filter out sessions based on the dow ["Day of Week"] field (e.g. tue1, wed4)', action='store_true', default=None)
+        '--dow', help='filter out sessions based on the dow ["Day of Week"] field (e.g. tue1, wed4)', default=None)
     parser.add_argument(
         '--event_prefix', help='filter sessions that match the event prefix', default=None)
     parser.add_argument(
