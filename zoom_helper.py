@@ -194,6 +194,7 @@ def update_zoom_meeting(headers: Any, meeting_id: int, title: str, password: str
             "alternative_hosts": user_id,
             # Enable meeting registration approval. 2 - No registration required.
             "auto_recording": "cloud",
+            "waiting_room": True,
         },
         "start_time": format_time_iso8601_utc(start),
         # https://developers.zoom.us/docs/api/rest/other-references/abbreviation-lists/
