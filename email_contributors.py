@@ -7,17 +7,20 @@ import argparse
 import time
 
 
-def send_emails(auth: Authentication, template : dict, without_slot_contributors : bool = True, event_prefix : str = None, session_id : str = None, ignore_various : bool = True):
+def send_emails(auth: Authentication, template: dict, without_slot_contributors: bool = True, event_prefix: str = None, session_id: str = None, ignore_various: bool = True, dow: str = None):
     """send emails to session targets, recipients have to be specified in template as well
     """
-    rows = join_session_contributor_rows() if without_slot_contributors else join_slot_contributors()
-    
+    rows = join_session_contributor_rows(
+    ) if without_slot_contributors else join_slot_contributors()
+
     if ignore_various:
         rows = list(filter(lambda r: r["Track"] != "various", rows))
     if event_prefix and len(event_prefix) > 0:
         rows = list(filter(lambda r: r["Event Prefix"] == event_prefix, rows))
     if session_id and len(session_id) > 0:
         rows = list(filter(lambda r: r["Session ID"] == session_id, rows))
+    if dow and len(dow) > 0:
+        rows = list(filter(lambda r: r["Day of Week"] == dow, rows))
     print(f"sending emails for {len(rows)} rows")
     i = 0
     for row in rows:
@@ -61,6 +64,7 @@ def join_session_contributor_rows() -> List[dict]:
         s.update(ev)
     return data
 
+
 def join_slot_contributors() -> List[dict]:
     """retrieve and join each session row with corresponding event row, but also consolidate
     all presenters/speakers based on the associated slot items into the 'Slot Contributors Emails' column
@@ -73,15 +77,15 @@ def join_slot_contributors() -> List[dict]:
     items1_sheet.load_sheet("ItemsVIS-A")
     items2_sheet = GoogleSheets()
     items2_sheet.load_sheet("ItemsEXT")
-    #items3_sheet = GoogleSheets()
-    #items3_sheet.load_sheet("ItemsVISSpecial")
+    # items3_sheet = GoogleSheets()
+    # items3_sheet.load_sheet("ItemsVISSpecial")
 
     items = []
     items.extend(items1_sheet.data)
     items.extend(items2_sheet.data)
-    #items.extend(items3_sheet.data)
+    # items.extend(items3_sheet.data)
 
-    items_by_session : dict[str, List[dict]] = {}
+    items_by_session: dict[str, List[dict]] = {}
 
     for item in items:
         s_id = item["Session ID"]
@@ -92,23 +96,24 @@ def join_slot_contributors() -> List[dict]:
         if s_id in items_by_session:
             items_by_session[s_id].append(item)
         else:
-            items_by_session[s_id] = [ item ]
+            items_by_session[s_id] = [item]
 
     for s in sessions:
         s_id = s["Session ID"]
         s["Slot Contributors Emails"] = ""
         if type(s_id) != str or len(s_id.strip()) == 0 or s_id not in items_by_session:
-            print(f"WARNING: could not match session id {s_id} to any slot item")
+            print(f"WARNING: could not match session id {
+                  s_id} to any slot item")
             continue
         emails_set = set()
         emails = []
         items = items_by_session[s_id]
         for item in items:
-            cont_emails :str = item["Slot Contributors Emails"]
+            cont_emails: str = item["Slot Contributors Emails"]
             if type(cont_emails) != str or len(cont_emails) == 0:
                 continue
             for em in cont_emails.split('|'):
-                email : str = em.strip()
+                email: str = em.strip()
                 h = email.lower()
                 if h in emails_set:
                     continue
@@ -116,6 +121,7 @@ def join_slot_contributors() -> List[dict]:
                 emails.append(email)
         s["Slot Contributors Emails"] = "|".join(emails)
     return sessions
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -125,29 +131,31 @@ if __name__ == '__main__':
                         action='store_true', default=False)
     parser.add_argument('--speakers', help='send email to session targets such slot contributors, hosts/chairs, event organizers',
                         action='store_true', default=False)
-    
     parser.add_argument('--ignore_various', help='do not send emails to events in various track (default)',
                         action='store_true', default=True)
 
     parser.add_argument(
         '--email_template', help='template to use for the email', default=None)
-
     parser.add_argument(
-        '--event_prefix', help='filter sessions that match the event prefix', default=None)    
+        '--dow', help='filter out sessions based on the dow ["Day of Week"] field (e.g. tue1, wed4)', action='store_true', default=None)
+    parser.add_argument(
+        '--event_prefix', help='filter sessions that match the event prefix', default=None)
     parser.add_argument(
         '--session_id', help='only send info concerning one session', default=None)
 
     args = parser.parse_args()
     auth = Authentication(email=True)
-    
+
     templates = load_templates_dict()
     template_key = args.email_template
     if not template_key or template_key not in templates:
         print(f"could not found template {template_key}")
         exit(-1)
-    template : dict = templates[template_key]
+    template: dict = templates[template_key]
 
     if args.session:
-        send_emails(auth, template, True, args.event_prefix, args.session_id, args.ignore_various)
-    elif args.speakers:        
-        send_emails(auth, template, False, args.event_prefix, args.session_id, args.ignore_various)
+        send_emails(auth, template, True, args.event_prefix,
+                    args.session_id, args.ignore_various, args.dow)
+    elif args.speakers:
+        send_emails(auth, template, False, args.event_prefix,
+                    args.session_id, args.ignore_various, args.dow)
