@@ -167,6 +167,54 @@ def get_meeting(auth: Authentication, meeting_id: str) -> requests.Response:
     return resp
 
 
+def update_zoom_meeting(headers: Any, meeting_id: int, title: str, password: str, start: datetime, end: datetime,
+                        agenda: str, user_id: str, session_id: str):
+    """Update a zoom meeting
+    """
+    # Max Zoom meeting topic length is 200 characters
+    if len(title) > 200:
+        title = title[0:199]
+    # Max agenda length is 2000 characters
+    if len(agenda) > 2000:
+        agenda = agenda[0:1999]
+
+    difference = end - start
+    duration = divmod(difference.total_seconds(), 60)[0]
+
+    meeting_info = {
+        "agenda": agenda,
+        "default_password": False,
+        "duration": int(duration),
+        "password": password,
+        # Whether to create a prescheduled meeting via the GSuite app. This only supports the meeting type value of 2 (scheduled meetings) and 3 (recurring meetings with no fixed time).
+        "pre_schedule": False,
+
+        "settings": {
+            # Need to update alt host if moved session
+            "alternative_hosts": user_id,
+            # Enable meeting registration approval. 2 - No registration required.
+            "auto_recording": "cloud",
+            "waiting_room": True,
+        },
+        "start_time": format_time_iso8601_utc(start),
+        # https://developers.zoom.us/docs/api/rest/other-references/abbreviation-lists/
+        "timezone": "America/New_York",
+        "topic": title,
+        "tracking_fields": [
+            {
+                "field": "session_id",
+                "value": session_id
+            }
+        ],
+        "type": 2
+    }
+
+    meeting_resp = requests.patch(f"https://api.zoom.us/v2/meetings/{meeting_id}",
+                                  json=meeting_info, headers=headers)
+    print(meeting_resp)
+    return meeting_resp
+
+
 def schedule_zoom_meeting(headers: Any, title: str, password: str, start: datetime, end: datetime,
                           agenda: str, user_id: str, session_id: str):
     """Schedule a zoom meeting
@@ -193,7 +241,8 @@ def schedule_zoom_meeting(headers: Any, title: str, password: str, start: dateti
             # Enable meeting registration approval. 2 - No registration required.
             "approval_type": 2,
             "audio": "both",
-            "auto_recording": "none",
+            # Recommend auto recording in case issues
+            "auto_recording": "cloud",
             "close_registration": False,
             "contact_email": "ieeevistech@gmail.com",
             "contact_name": "IEEE VIS Tech Chairs",
@@ -316,7 +365,82 @@ def schedule_meetings(args: argparse.Namespace):
             print(f"Zoom Host not found for session {session_id}")
 
 
-def update_zoom_meeting_livestream(auth: Authentication, meeting_id: int, page_url: str, stream_key: str, stream_url: str, resolution: str = "1080p"):
+def update_meetings(args: argparse.Namespace):
+    """Schedule meetings based on Sessions sheet in Data spreadsheet
+    """
+    auth = Authentication()
+    headers = get_headers_with_access(auth)
+
+    sessions_sheet = GoogleSheets()
+    sessions_sheet.load_sheet("Sessions")
+    tracks = GoogleSheets()
+    tracks.load_sheet("Tracks")
+    tracks_dict: dict[dict[str, Any], Any] = {}
+    for row in tracks.data:
+        tracks_dict[row["Track"]] = row
+    events_sheet = GoogleSheets()
+    events_sheet.load_sheet("Events")
+    events = events_sheet.data
+    events_dict = dict()
+    for e in events:
+        events_dict[e["Event Prefix"]] = e["Event"]
+
+    # Filter out sessions have a Track and Zoom Meeting ID already to update
+    sessions = list(filter(lambda row: row["Track"] and len(
+        row["Track"].strip()) > 0 and row["Zoom Meeting ID"] and len(row["Zoom Meeting ID"].strip()) > 0, sessions_sheet.data))
+
+    # Filter for args event_prefix
+    if args.event_prefix and len(args.event_prefix) > 0:
+        sessions = list(
+            filter(lambda it: it["Event Prefix"] == args.event_prefix, sessions))
+
+    # Filter for args track id
+    if args.track and len(args.track) > 0:
+        sessions = list(filter(lambda it: it["Track"] == args.track, sessions))
+    # Filter for day of the week e.g. mon1, tue1 for 1 block on Monday or Tuesday
+    if args.dow:
+        sessions = list(
+            filter(lambda it: it["Day of Week"] == args.dow, sessions))
+
+    num_to_schedule = len(sessions)
+    if num_to_schedule > args.max_n_schedules:
+        num_to_schedule = args.max_n_schedules
+
+    print(f"{num_to_schedule} meetings will be updated")
+
+    success = 0
+    for i in range(num_to_schedule):
+        session: dict[str, Any] = sessions[i]
+        title = session["Session Title"]
+        track = tracks_dict[session["Track"]]
+        session_id = session["Session ID"]
+        start = datetime.fromisoformat(
+            session["DateTime Start"].replace('Z', '+00:00'))
+        end = datetime.fromisoformat(
+            session["DateTime End"].replace('Z', '+00:00'))
+        start = start - timedelta(minutes=args.time_before)
+        end = end + timedelta(minutes=args.time_after)
+        room = track["Room Name"]
+        host = track["Zoom Host ID"]
+        meeting_id = int(session["Zoom Meeting ID"])
+        password = generate_password()
+        event_name = events_dict[session["Event Prefix"]]
+        agenda = f"Event: {event_name}\n Session: {
+            session["Session Title"]}\n Program: https://ieeevis.org/year/2024/program/session_{session["Session ID"]}.html"
+        
+        if host:
+            print(
+                f"\r\n{i+1}/{num_to_schedule}: {title} - {room} | {start} - {end} | {host}")
+            resp = update_zoom_meeting(
+                headers, meeting_id, f"IEEE VIS - {title}", password, start, end, agenda, host, session_id)
+            if resp.status_code == 204:
+                success += 1
+        else:
+            print(f"Zoom Host not found for session {session_id}")
+    print(f"{success} out of {len(sessions)} updated successfully")
+
+
+def update_zoom_meeting_livestream(auth: Authentication, meeting_id: int, page_url: str, stream_key: str, stream_url: str, resolution: str = "720p"):
     livestream_info = {
         # The live stream page URL.
         "page_url": page_url,
@@ -367,7 +491,7 @@ def update_session_zoom_livestreams(args: argparse.Namespace):
         stream_key = sk["Stream Key"]
         stream_url = sk["Ingestion URL"]
         resp = update_zoom_meeting_livestream(
-            auth, id, page_url, stream_key, stream_url, "1080p")
+            auth, id, page_url, stream_key, stream_url, "720p")
         if resp.status_code != 204:
             print(resp.status_code, resp.text)
             print(f"{id} meeting not updated")
@@ -427,7 +551,7 @@ def update_status_for_livestreams(args: argparse.Namespace, action: str):
     for s in sessions:
         id = s["Zoom Meeting ID"]
         resp = update_livestream_status(
-            auth, id, action, "follow_host", "embedded")
+            auth, id, action, "follow_host", "off")
         if resp.status_code != 204:
             print(resp.status_code, resp.text)
             print(f"{id} meeting not updated")
@@ -440,6 +564,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Schedule zoom meetings')
     parser.add_argument('--schedule', action="store_true",
                         help='schedule zoom meetings for sessions in sheet')
+    parser.add_argument('--update', action="store_true",
+                        help='update zoom meetings for sessions in sheet')
     parser.add_argument('--delete', action="store_true",
                         help='delete specified meeting')
     parser.add_argument('--get', action="store_true",
@@ -447,7 +573,7 @@ if __name__ == '__main__':
     parser.add_argument('--update_livestream', action="store_true",
                         help='update the livestream for all sessions based on streamkeys to YouTube')
     parser.add_argument('--start_livestream', action="store_true",
-                        help="update status of livestreams to start and use embedded captions")
+                        help="update status of livestreams to start and turn off stream captions")
     parser.add_argument('--stop_livestream', action="store_true",
                         help="update status of livestreams to stop")
     parser.add_argument('--start_url', action="store_true",
@@ -474,6 +600,8 @@ if __name__ == '__main__':
 
     if args.schedule:
         schedule_meetings(args)
+    elif args.update:
+        update_meetings(args)
     elif args.delete:
         resp = delete_meeting(Authentication(), args.id)
         print(resp)
@@ -486,4 +614,3 @@ if __name__ == '__main__':
         start_livestreams(args)
     elif args.stop_livestream:
         stop_livestreams(args)
-    
