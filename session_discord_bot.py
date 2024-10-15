@@ -25,7 +25,7 @@ tracks_dict = dict()
 for t in sheet_tracks.data:
     tracks_dict[t["Track"]] = t
 
-    
+
 last_tick = datetime.now(timezone.utc) - timedelta(minutes=25.0)
 
 @client.event
@@ -82,7 +82,7 @@ async def post_session_info():
     if not guild:
         return
     dt = datetime.now(timezone.utc)
-    
+
     #print(f"{dt} tick")
     for start, end, session in sessions:
         if last_tick < start and dt >= start and dt < end:
@@ -99,6 +99,21 @@ async def post_session_info():
             print(f"{dt} sending message")
             await ch.send(
                 content=f"The session **{title}** in this track is going to start in just a few minutes.\n\r\nCheck the session overview on our content website: https://ieeevis.org/year/2024/program/session_{sid}.html\r\nPlease use this channel for fruitful exchanges, but note that session chairs **will not pick up questions on Discord for Q+A**.\n\r\nTo ask questions visit Slido: {slido_url}",
+                allowed_mentions=discord.AllowedMentions.none(),
+                suppress_embeds=True
+            )
+        if last_tick < end - timedelta(minutes=5) and dt >= end - timedelta(minutes=5) and dt < end:
+            sid = session["Session ID"].strip()
+            if len(sid) == 0 or sid not in session_id_to_channel:
+                continue
+            ch = session_id_to_channel[sid]
+            title = session["Session Title"]
+            track = session["Track"]
+            if len(track) == 0 or track == "various" or track == "none":
+                continue
+            print(f"{dt} sending session ending message")
+            await ch.send(
+                content=f"The session **{title}** is scheduled to end in 5 minutes. We will end the YouTube stream in 10 minutes.",
                 allowed_mentions=discord.AllowedMentions.none(),
                 suppress_embeds=True
             )
