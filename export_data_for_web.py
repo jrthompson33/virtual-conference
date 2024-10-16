@@ -191,6 +191,7 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
         sid = s["Session ID"]
         t = tracks_dict[s["Track"]] if s["Track"] in tracks_dict else None
         s_ff = ff_videos_dict[sid] if sid in ff_videos_dict else None
+        discord_link = s["Discord URL Change"] if s["Discord URL Change"] else t["Discord URL"] if t else ""
 
         s_data = {
             "title": s["Session Title"],
@@ -207,7 +208,7 @@ def create_data_for_web(auth: Authentication, output_dir: str, export_ics: bool,
             "discord_category": "",
             "discord_channel": t["Discord Channel"] if t else "",
             "discord_channel_id": t["Discord Channel ID"] if t else "",
-            "discord_link": t["Discord URL"] if t else "",
+            "discord_link": discord_link,
             "slido_link": s["Slido URL"],
             "zoom_private_meeting": s["Zoom Meeting ID"],
             "zoom_private_password": s["Zoom Password"],
